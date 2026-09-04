@@ -8,6 +8,9 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      STU_POSTGRES_PASSWORD: ci-compose-validation-only
+      STU_DB_CONNECTION: Host=database;Port=5432;Database=stu;Username=stu;Password=ci-compose-validation-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v5
