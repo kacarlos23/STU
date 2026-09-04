@@ -1,0 +1,76 @@
+name: stu-pilot
+
+services:
+  pilot-operations-init:
+    image: alpine:3.23
+    command: ["sh", "-c", "chown -R 1654:1654 /operations && chmod 770 /operations"]
+    volumes:
+      - stu-pilot-operations:/operations
+    restart: "no"
+
+  pilot-database:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: stu_load_pilot
+      POSTGRES_USER: stu_pilot
+      POSTGRES_PASSWORD: ${STU_PILOT_POSTGRES_PASSWORD:?Execute scripts/pilot-data.ps1 configure}
+    ports:
+      - "127.0.0.1:${STU_PILOT_POSTGRES_PORT:-55433}:5432"
+    volumes:
+      - stu-pilot-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stu_pilot -d stu_load_pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  pilot-api:
+    build:
+      context: .
+      dockerfile: src/STU.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__StuDatabase: Host=pilot-database;Port=5432;Database=stu_load_pilot;Username=stu_pilot;Password=${STU_PILOT_POSTGRES_PASSWORD:?Execute scripts/pilot-data.ps1 configure}
+      Database__ApplyMigrations: "true"
+      Database__MaximumPoolSize: "80"
+      Operations__StoragePath: /operations
+      Cors__AllowedOrigins__0: http://127.0.0.1:${STU_PILOT_API_PORT:-8092}
+      Https__EnableRedirection: "false"
+      RateLimiting__ApiPermitLimit: 100000
+      RateLimiting__LoginPermitLimit: 100000
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
+    ports:
+      - "127.0.0.1:${STU_PILOT_API_PORT:-8092}:8080"
+    depends_on:
+      pilot-database:
+        condition: service_healthy
+      pilot-operations-init:
+        condition: service_completed_successfully
+    volumes:
+      - stu-pilot-operations:/operations
+    restart: unless-stopped
+
+  pilot-worker:
+    build:
+      context: .
+      dockerfile: src/STU.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__StuDatabase: Host=pilot-database;Port=5432;Database=stu_load_pilot;Username=stu_pilot;Password=${STU_PILOT_POSTGRES_PASSWORD:?Execute scripts/pilot-data.ps1 configure}
+      Database__MaximumPoolSize: "10"
+      Operations__StoragePath: /operations
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
+    depends_on:
+      pilot-database:
+        condition: service_healthy
+      pilot-operations-init:
+        condition: service_completed_successfully
+    volumes:
+      - stu-pilot-operations:/operations
+    restart: unless-stopped
+
+volumes:
+  stu-pilot-postgres:
+  stu-pilot-operations:

@@ -1,0 +1,229 @@
+.territory-editor-backdrop {
+  align-items: stretch;
+  background: transparent;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.territory-editor {
+  box-shadow: 0 1.25rem 4rem rgba(20, 42, 36, 0.28);
+  max-width: 430px;
+  pointer-events: auto;
+}
+
+.geometry-tools button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.geometry-tools .drawing-ready {
+  background: #176f5d;
+  border-color: #176f5d;
+  color: #fff;
+}
+
+.territory-list article[role="button"] {
+  border-radius: 0.65rem;
+  cursor: pointer;
+  margin-inline: -0.45rem;
+  padding-inline: 0.45rem;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.territory-list article[role="button"]:hover {
+  background: #f3f8f6;
+}
+
+.territory-list article[role="button"]:focus-visible {
+  outline: 3px solid rgba(35, 112, 95, 0.25);
+  outline-offset: 2px;
+}
+
+.territory-list article.territory-card-focused {
+  background: #e7f4ef;
+  box-shadow: inset 3px 0 #23705f;
+}
+
+.geometry-tools .osm-candidate-picker {
+  background: #fff;
+  border: 1px solid #cbded8;
+  cursor: default;
+  display: grid;
+  font-size: 0.6rem;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+}
+
+.geometry-tools .osm-candidate-picker select {
+  display: block;
+  min-height: 2.4rem;
+  width: 100%;
+}
+
+.geometry-tools .osm-candidate-picker small {
+  color: #638078;
+  font-weight: 500;
+}
+
+.territory-kind-label {
+  align-items: center;
+  display: flex;
+  gap: 0.32rem;
+}
+
+.territory-kind-label i,
+.territory-neighborhood-picker label i {
+  border: 1px solid rgba(20, 42, 36, 0.2);
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 0.65rem;
+  width: 0.65rem;
+}
+
+.territory-neighborhood-picker {
+  border: 1px solid #d7e1de;
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.7rem;
+}
+
+.territory-neighborhood-picker legend {
+  color: #49635c;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0 0.25rem;
+}
+
+.territory-neighborhood-picker > small {
+  color: #71857f;
+  font-size: 0.56rem;
+}
+
+.territory-neighborhood-picker > div {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 9rem;
+  overflow: auto;
+}
+
+.territory-neighborhood-picker label {
+  align-items: center;
+  background: #f5f8f7;
+  border-radius: 0.45rem;
+  color: #405f57;
+  cursor: pointer;
+  display: grid;
+  font-size: 0.58rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  grid-template-columns: auto auto 1fr;
+  padding: 0.45rem;
+}
+
+.territory-neighborhood-picker input {
+  accent-color: #176f5d;
+  margin: 0;
+}
+
+.territory-field-help {
+  color: #71857f;
+  font-size: 0.56rem;
+  font-weight: 500;
+}
+
+.territory-color-field {
+  align-items: start;
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+  position: relative;
+  width: max-content;
+}
+
+.territory-color-field > span {
+  color: #49635c;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.territory-color-trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d7e1de;
+  border-radius: 0.55rem;
+  color: #35564e;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: auto auto auto;
+  min-height: 2.45rem;
+  padding: 0.45rem 0.65rem;
+  width: auto;
+}
+
+.territory-color-trigger i {
+  border: 1px solid rgba(20, 42, 36, 0.22);
+  border-radius: 0.35rem;
+  height: 1.25rem;
+  width: 1.55rem;
+}
+
+.territory-color-trigger output {
+  color: #5e756e;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.territory-color-trigger b {
+  color: #789088;
+  font-size: 0.48rem;
+}
+
+.territory-color-palette {
+  background: #fff;
+  border: 1px solid #d7e1de;
+  border-radius: 0.65rem;
+  box-shadow: 0 0.8rem 2rem rgba(20, 42, 36, 0.18);
+  display: grid;
+  gap: 0.42rem;
+  grid-template-columns: repeat(3, 1.8rem);
+  left: 0;
+  padding: 0.55rem;
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  width: max-content;
+  z-index: 8;
+}
+
+.territory-color-palette button {
+  border: 2px solid #fff;
+  border-radius: 0.45rem;
+  box-shadow: 0 0 0 1px rgba(20, 42, 36, 0.2);
+  height: 1.8rem;
+  min-height: 0;
+  padding: 0;
+  width: 1.8rem;
+}
+
+.territory-color-palette button[aria-pressed="true"] {
+  box-shadow: 0 0 0 3px #173b35;
+}
+
+@media (max-width: 900px) {
+  .territory-editor-backdrop {
+    align-items: flex-end;
+    padding: 0.5rem;
+  }
+
+  .territory-editor {
+    max-height: 58vh;
+    max-width: none;
+  }
+}

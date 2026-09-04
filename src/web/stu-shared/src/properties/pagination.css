@@ -1,0 +1,48 @@
+.property-pagination {
+  align-items: center;
+  display: flex;
+  gap: .6rem;
+  justify-content: center;
+  padding: .8rem;
+}
+
+.property-pagination button {
+  background: #fff;
+  border: 1px solid #d7e1de;
+  border-radius: .45rem;
+  color: #35564e;
+  cursor: pointer;
+  font-size: .58rem;
+  padding: .4rem .55rem;
+}
+
+.property-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.property-pagination span {
+  color: #758984;
+  font-size: .58rem;
+}
+
+.visit-actions {
+  display: flex;
+  gap: .3rem;
+  margin-top: .45rem;
+}
+
+.visit-actions button {
+  background: #f3f6f5;
+  border: 1px solid #dfe6e4;
+  border-radius: .4rem;
+  color: #4b6b63;
+  cursor: pointer;
+  font-size: .53rem;
+  padding: .3rem .45rem;
+}
+
+.visit-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: dotnet restore STU.slnx
+      - run: dotnet build STU.slnx --configuration Release --no-restore
+      - run: dotnet test STU.slnx --configuration Release --no-build
+      - run: npm ci
+      - run: npm run lint:web
+      - run: npm run test:web
+      - run: npm run build:web
+      - run: docker compose config --quiet

@@ -1,0 +1,70 @@
+.territory-microregion-heading {
+  align-items: end;
+  border-top: 1px solid #e4ebe9;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+  padding-top: 0.9rem;
+}
+
+.territory-microregion-heading > span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.territory-microregion-heading > span strong {
+  font-size: 0.78rem;
+}
+
+.territory-microregion-heading > span small {
+  color: #81918d;
+  font-size: 0.56rem;
+}
+
+.territory-microregion-heading > label {
+  color: #6e817c;
+  display: grid;
+  font-size: 0.54rem;
+  font-weight: 800;
+  gap: 0.15rem;
+}
+
+.territory-microregion-heading select {
+  background: #fff;
+  border: 1px solid #d7e1de;
+  border-radius: 0.4rem;
+  color: #35564e;
+  font-size: 0.56rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.territory-list article.territory-card-archived {
+  background: #f7f7f5;
+  border: 1px dashed #bdc9c5;
+  border-radius: 0.55rem;
+  margin-top: 0.55rem;
+  opacity: 0.82;
+  padding: 0.75rem;
+}
+
+.territory-list article.territory-card-archived.territory-card-focused {
+  background: #fff4ea;
+  border-color: #cf6e32;
+  opacity: 1;
+}
+
+.territory-archived-warning {
+  background: #fff7e9;
+  border-radius: 0.5rem;
+  color: #806536;
+  font-size: 0.6rem;
+  margin: 0;
+  padding: 0.65rem;
+}
+
+.territory-list article button.territory-restore-action {
+  background: #e4f1ed;
+  color: #176f5d;
+  font-weight: 800;
+}

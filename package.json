@@ -1,0 +1,24 @@
+{
+  "name": "stu",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "src/web/stu-app",
+    "src/web/stu-admin",
+    "src/web/stu-shared"
+  ],
+  "scripts": {
+    "dev:app": "npm run dev -w stu-app",
+    "dev:admin": "npm run dev -w stu-admin",
+    "build:web": "npm run build --workspaces --if-present",
+    "lint:web": "npm run lint --workspaces --if-present",
+    "test:web": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "devDependencies": {
+    "axe-core": "^4.10.3"
+  }
+}

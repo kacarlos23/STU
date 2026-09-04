@@ -1,0 +1,11 @@
+listen_addresses: 0.0.0.0:3000
+keep_alive: 75
+
+mbtiles:
+  paths:
+    - /tiles
+
+pmtiles:
+  allow_http: false
+  paths:
+    - /tiles

@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+.vscode
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/coverage
+data
+backups
+exports
+logs
+docs
+tests

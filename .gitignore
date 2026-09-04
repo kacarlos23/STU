@@ -1,0 +1,35 @@
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.cache
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# IDE and OS
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+secrets/
+
+# Runtime data kept at the repository root
+/data/
+/backups/
+/exports/
+/logs/

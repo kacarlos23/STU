@@ -1,0 +1,35 @@
+.property-location-status {
+  border-radius: 0.45rem;
+  font-size: 0.58rem;
+  font-weight: 750;
+  margin-top: 0.45rem;
+  padding: 0.48rem 0.58rem;
+}
+
+.location-pending {
+  background: #fff7e9;
+  color: #806536;
+}
+
+.location-valid {
+  background: #e5f4ed;
+  color: #246b55;
+}
+
+.location-invalid,
+.property-form-error {
+  background: #fff0ed;
+  color: #8b3022;
+}
+
+.property-form-error {
+  border-radius: 0.5rem;
+  font-size: 0.6rem;
+  margin: 0.7rem 0 0;
+  padding: 0.6rem;
+}
+
+.property-modal footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

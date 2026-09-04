@@ -1,0 +1,21 @@
+{
+  "name": "@stu/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./territory": "./src/territory/index.ts",
+    "./properties": "./src/properties/PropertyWorkspace.tsx",
+    "./property-geometry": "./src/properties/propertyGeometry.ts",
+    "./operations": "./src/operations/OperationalWorkspace.tsx",
+    "./onboarding": "./src/onboarding/OnboardingWorkspace.tsx",
+    "./pilot-release": "./src/pilot-release/PilotReleaseWorkspace.tsx",
+    "./health-unit-users": "./src/health-unit-users/HealthUnitUsersWorkspace.tsx",
+    "./notifications": "./src/notifications/NotificationCenter.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}
