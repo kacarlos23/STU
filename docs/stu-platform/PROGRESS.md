@@ -1,6 +1,8 @@
 # STU platform progress
 
-## Status: Phase 6 complete; Phase 7 prepared
+## Status: Phase 7 preparation implemented; operational pilot acceptance pending
+
+Current review: [08/09/2026](../functional-review/PROJECT_REVIEW_2026-09-08.md). Historical test counts below refer to their original implementation sessions.
 
 ## Completed
 
@@ -51,4 +53,5 @@
 
 ## Blockers
 
-- None currently.
+- Real territory rehearsal, agent assignments and representative role accounts are incomplete.
+- Encrypted off-host transfer, supervised accessibility/training acceptance and the final pilot decision remain pending.

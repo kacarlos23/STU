@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
@@ -18,6 +19,7 @@ public static class OnboardingEndpoints
 {
     private const double AreaTolerance = 0.0000000001;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string[] PilotNeighborhoods = ["Luiz Eduardo Magalhães", "Nova Teixeira", "Redenção"];
 
     public static IEndpointRouteBuilder MapOnboardingEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -129,6 +131,8 @@ public static class OnboardingEndpoints
             .OrderBy(item => item.Name)
             .ToListAsync(cancellationToken);
         var activeNeighborhoodIds = neighborhoods.Select(item => item.Id).ToHashSet();
+        var missingPilotNeighborhoods = PilotNeighborhoods.Where(expected => !neighborhoods.Any(item =>
+            CultureInfo.InvariantCulture.CompareInfo.Compare(item.Name.Trim(), expected, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0)).ToArray();
         var properties = await db.Properties.AsNoTracking()
             .Where(item => item.HealthUnitId == unitId && item.ArchivedAtUtc == null)
             .ToListAsync(cancellationToken);
@@ -145,9 +149,15 @@ public static class OnboardingEndpoints
 
         var activeUsers = await db.Users.AsNoTracking()
             .Where(item => item.HealthUnitId == unitId && item.ArchivedAtUtc == null)
-            .Select(item => new { item.Id, item.MustChangePassword })
+            .Select(item => new { item.Id, item.DisplayName, item.MustChangePassword })
             .ToListAsync(cancellationToken);
         var activeUserIds = activeUsers.Select(item => item.Id).ToArray();
+        var memberships = await (from userRole in db.UserRoles.AsNoTracking()
+            join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+            where activeUserIds.Contains(userRole.UserId) && role.ArchivedAtUtc == null
+            select new { userRole.UserId, userRole.RoleId, role.Name }).ToListAsync(cancellationToken);
+        var validAgentIds = memberships.Where(item => item.Name == SystemRoles.HealthAgent).Select(item => item.UserId).ToHashSet();
+        unassignedMicroregions = microregions.Count(item => !item.AssignedAgentId.HasValue || !validAgentIds.Contains(item.AssignedAgentId.Value));
         var roleCounts = await (
             from userRole in db.UserRoles.AsNoTracking()
             join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
@@ -187,12 +197,15 @@ public static class OnboardingEndpoints
         var checks = new List<ReadinessCheck>
         {
             Check("neighborhood-count", "Três bairros vinculados", neighborhoods.Count == 3, $"{neighborhoods.Count} de 3 bairro(s) vinculados às microrregiões da UBS."),
+            Check("pilot-neighborhoods", "Bairros previstos para o piloto", missingPilotNeighborhoods.Length == 0,
+                missingPilotNeighborhoods.Length == 0 ? "Os três bairros aprovados estão vinculados." : $"Faltam vínculos com: {string.Join(", ", missingPilotNeighborhoods)}."),
             Check("microregions", "Microrregiões cadastradas", microregions.Count > 0, $"{microregions.Count} microrregião(ões) ativa(s)."),
+            Check("properties", "Imóveis cadastrados para o ensaio", properties.Count > 0, $"{properties.Count} imóvel(is) não arquivado(s)."),
             Check("coordinate-system", "Geometrias válidas em SRID 4326", invalidNeighborhoods + invalidMicroregions == 0, $"{invalidNeighborhoods + invalidMicroregions} geometria(s) inválida(s) ou fora do SRID 4326."),
             Check("overlaps", "Sem sobreposição interna", overlapPairs == 0, $"{overlapPairs} par(es) de microrregiões com sobreposição de área."),
             Check("coverage-gaps", "Sem lacunas entre bairros e microrregiões", gapArea <= AreaTolerance && outsideArea <= AreaTolerance, $"Área sem cobertura: {gapArea:G6}; área fora dos bairros: {outsideArea:G6}."),
             Check("neighborhood-links", "Todas as microrregiões vinculadas a bairro", orphanMicroregions == 0, $"{orphanMicroregions} microrregião(ões) sem bairro ativo."),
-            Check("agent-assignments", "Todas as microrregiões com agente", unassignedMicroregions == 0, $"{unassignedMicroregions} microrregião(ões) sem agente responsável."),
+            Check("agent-assignments", "Todas as microrregiões com agente ativo da UBS", unassignedMicroregions == 0, $"{unassignedMicroregions} microrregião(ões) sem agente ativo com função de agente de saúde nesta UBS."),
             Check("property-boundaries", "Imóveis dentro da microrregião", propertiesOutside == 0, $"{propertiesOutside} imóvel(is) fora do limite atribuído."),
             Check("family-numbers", "Números de família sem duplicidade", duplicateFamilies == 0, $"{duplicateFamilies} número(s) de família duplicado(s)."),
             Check("role-accounts", "Contas dos quatro perfis operacionais", counts.HealthAgents > 0 && counts.Receptionists > 0 && counts.Doctors > 0 && counts.Managers > 0, $"Agentes {counts.HealthAgents}; recepção {counts.Receptionists}; médicos {counts.Doctors}; gerentes {counts.Managers}."),
@@ -204,6 +217,16 @@ public static class OnboardingEndpoints
         var hashPayload = JsonSerializer.Serialize(new
         {
             unit.Id,
+            unit.Code,
+            unit.Name,
+            // Counts alone do not identify the reviewed records. Tokens also invalidate
+            // approvals after an edit that leaves every count/check unchanged.
+            NeighborhoodState = neighborhoods.OrderBy(item => item.Id).Select(item => new { item.Id, item.ConcurrencyToken }),
+            MicroregionState = microregions.OrderBy(item => item.Id).Select(item => new { item.Id, item.ConcurrencyToken, item.AssignedAgentId }),
+            LinkState = links.OrderBy(item => item.MicroregionId).ThenBy(item => item.NeighborhoodId).Select(item => new { item.MicroregionId, item.NeighborhoodId }),
+            PropertyState = properties.OrderBy(item => item.Id).Select(item => new { item.Id, item.ConcurrencyToken }),
+            UserState = activeUsers.OrderBy(item => item.Id),
+            RoleState = memberships.OrderBy(item => item.UserId).ThenBy(item => item.RoleId),
             counts,
             importSummary,
             CheckState = checks.Select(item => new { item.Id, item.Status, item.Detail }),

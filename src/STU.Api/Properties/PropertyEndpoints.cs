@@ -50,7 +50,7 @@ public static partial class PropertyEndpoints
         if(!string.IsNullOrWhiteSpace(query)){var q=query.Trim();properties=properties.Where(x=>x.Street.Contains(q,StringComparison.OrdinalIgnoreCase)||x.HouseNumber.Contains(q,StringComparison.OrdinalIgnoreCase)||x.FamilyNumber.Contains(q,StringComparison.OrdinalIgnoreCase)).ToList();}
         var ids=properties.Select(x=>x.Id).ToArray();var lastVisits=await db.PropertyVisits.AsNoTracking().Where(x=>ids.Contains(x.PropertyId)&&x.ArchivedAtUtc==null).GroupBy(x=>x.PropertyId).Select(g=>new{PropertyId=g.Key,Last=g.Max(x=>x.VisitedAtUtc)}).ToDictionaryAsync(x=>x.PropertyId,x=>x.Last);
         var rules=await db.CoverageRules.AsNoTracking().Where(x=>x.HealthUnitId==scope.UnitId).ToDictionaryAsync(x=>x.MicroregionId,x=>x.MaxDaysWithoutVisit);var links=await LoadTagsAsync(ids,db);
-        var projected=properties.Select(x=>Response(x,lastVisits.GetValueOrDefault(x.Id),rules.GetValueOrDefault(x.MicroregionId),links.GetValueOrDefault(x.Id,[]))).ToList();
+        var projected=properties.Select(x=>Response(x,lastVisits.TryGetValue(x.Id,out var lastVisit)?lastVisit:null,rules.GetValueOrDefault(x.MicroregionId),links.GetValueOrDefault(x.Id,[]))).ToList();
         if(!string.IsNullOrWhiteSpace(coverage))projected=projected.Where(x=>string.Equals(x.CoverageStatus,coverage,StringComparison.OrdinalIgnoreCase)).ToList();
         return Results.Ok(new{items=projected.Skip((page-1)*pageSize).Take(pageSize),total=projected.Count,page,pageSize});
     }
@@ -65,7 +65,7 @@ public static partial class PropertyEndpoints
             items=items.Where(x=>assignedMicroregions.Contains(x.MicroregionId)).ToList();
         }
         var ids=items.Select(x=>x.Id).ToArray();var last=await db.PropertyVisits.AsNoTracking().Where(x=>ids.Contains(x.PropertyId)&&x.ArchivedAtUtc==null).GroupBy(x=>x.PropertyId).Select(g=>new{g.Key,Last=g.Max(x=>x.VisitedAtUtc)}).ToDictionaryAsync(x=>x.Key,x=>x.Last);var rules=await db.CoverageRules.AsNoTracking().Where(x=>x.HealthUnitId==scope.UnitId).ToDictionaryAsync(x=>x.MicroregionId,x=>x.MaxDaysWithoutVisit);
-        return Results.Ok(new{type="FeatureCollection",features=items.Select(x=>new{type="Feature",id=x.Id,geometry=x.Geometry,properties=new{entityType="property",id=x.Id,x.HouseNumber,x.FamilyNumber,x.MicroregionId,coverageStatus=Coverage(last.GetValueOrDefault(x.Id),rules.GetValueOrDefault(x.MicroregionId))}})});
+        return Results.Ok(new{type="FeatureCollection",features=items.Select(x=>new{type="Feature",id=x.Id,geometry=x.Geometry,properties=new{entityType="property",id=x.Id,x.HouseNumber,x.FamilyNumber,x.MicroregionId,coverageStatus=Coverage(last.TryGetValue(x.Id,out var lastVisit)?lastVisit:null,rules.GetValueOrDefault(x.MicroregionId))}})});
     }
 
     private static async Task<IResult> GetReferenceDataAsync(Guid? healthUnitId,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)
@@ -97,13 +97,33 @@ public static partial class PropertyEndpoints
     private static async Task<IResult> UpdatePropertyAsync(Guid id,SavePropertyRequest request,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)
     {
         var item=await db.Properties.SingleOrDefaultAsync(x=>x.Id==id);if(item is null)return Results.NotFound();var actor=await ActorAsync(http,users);if(!await CanManageAsync(item,actor,http.User,users,db))return Results.Forbid();if(request.ExpectedVersion!=item.ConcurrencyToken)return Conflict("Cadastro alterado","Recarregue o imóvel antes de editar novamente.");
-        var validation=await ValidatePropertyAsync(request,id,actor,http.User,users,db);if(validation.Error is not null)return validation.Error;var reassigned=!string.Equals(item.HouseNumber,request.HouseNumber.Trim(),StringComparison.OrdinalIgnoreCase)||!string.Equals(item.FamilyNumber,request.FamilyNumber.Trim(),StringComparison.OrdinalIgnoreCase);
+        var validation=await ValidatePropertyAsync(request,id,actor,http.User,users,db);if(validation.Error is not null)return validation.Error;
+        if(validation.UnitId!=item.HealthUnitId)return Conflict("Transferência de UBS indisponível","A edição do imóvel permite alterar a microrregião dentro da mesma UBS. A transferência entre UBS exige um fluxo que preserve visitas, etiquetas e histórico.");
+        var reassigned=!string.Equals(item.HouseNumber,request.HouseNumber.Trim(),StringComparison.OrdinalIgnoreCase)||!string.Equals(item.FamilyNumber,request.FamilyNumber.Trim(),StringComparison.OrdinalIgnoreCase);
         item.Update(request.MicroregionId,request.Street,request.HouseNumber,request.FamilyNumber,request.PostalCode,request.Complement,validation.Geometry!,validation.Status,validation.Situation);await SyncTagsAsync(item.Id,item.HealthUnitId,request.TagIds,db);var kind=reassigned?"ReassignIdentifiers":"Update";db.PropertyVersions.Add(PropertyVersion.Capture(item,await NextVersionAsync(id,db),kind,actor.Id));Audit(db,http,actor,kind,"Property",item.Id,$"Imóvel {item.HouseNumber}, família {item.FamilyNumber}, atualizado.");await db.SaveChangesAsync();return Results.Ok(new{item.ConcurrencyToken});
     }
 
     private static Task<IResult> ArchivePropertyAsync(Guid id,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)=>SetArchivedAsync(id,true,http,users,db);
     private static Task<IResult> RestorePropertyAsync(Guid id,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)=>SetArchivedAsync(id,false,http,users,db);
-    private static async Task<IResult> SetArchivedAsync(Guid id,bool archive,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db){var item=await db.Properties.SingleOrDefaultAsync(x=>x.Id==id);if(item is null)return Results.NotFound();var actor=await ActorAsync(http,users);if(!await CanManageAsync(item,actor,http.User,users,db))return Results.Forbid();if(!archive&&await db.Properties.AnyAsync(x=>x.Id!=id&&x.HealthUnitId==item.HealthUnitId&&x.FamilyNumber==item.FamilyNumber&&x.ArchivedAtUtc==null))return Conflict("Número de família em uso","Altere o número antes de reativar este imóvel.");if(archive)item.Archive();else item.Restore();var action=archive?"Archive":"Restore";db.PropertyVersions.Add(PropertyVersion.Capture(item,await NextVersionAsync(id,db),action,actor.Id));Audit(db,http,actor,action,"Property",item.Id,$"Imóvel {(archive?"arquivado":"reativado")}.");await db.SaveChangesAsync();return Results.NoContent();}
+    private static async Task<IResult> SetArchivedAsync(Guid id,bool archive,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)
+    {
+        var item=await db.Properties.SingleOrDefaultAsync(x=>x.Id==id);
+        if(item is null)return Results.NotFound();
+        var actor=await ActorAsync(http,users);
+        if(!await CanManageAsync(item,actor,http.User,users,db))return Results.Forbid();
+        if(!archive)
+        {
+            if(await db.Properties.AnyAsync(x=>x.Id!=id&&x.HealthUnitId==item.HealthUnitId&&x.FamilyNumber==item.FamilyNumber&&x.ArchivedAtUtc==null))return Conflict("Número de família em uso","Altere o número antes de reativar este imóvel.");
+            var micro=await db.Microregions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==item.MicroregionId&&x.ArchivedAtUtc==null);
+            if(micro is null||micro.HealthUnitId!=item.HealthUnitId||!micro.Boundary.Covers(item.Geometry))return Conflict("Vínculo territorial inválido","Edite o imóvel para posicioná-lo dentro de uma microrregião ativa da mesma UBS antes de reativar.");
+            if(!await db.HealthUnits.AnyAsync(x=>x.Id==item.HealthUnitId&&x.ArchivedAtUtc==null))return Conflict("UBS indisponível","Reative a UBS antes de reativar o imóvel.");
+        }
+        if(archive)item.Archive();else item.Restore();
+        var action=archive?"Archive":"Restore";
+        db.PropertyVersions.Add(PropertyVersion.Capture(item,await NextVersionAsync(id,db),action,actor.Id));
+        Audit(db,http,actor,action,"Property",item.Id,$"Imóvel {(archive?"arquivado":"reativado")}.");
+        await db.SaveChangesAsync();return Results.NoContent();
+    }
 
     private static async Task<IResult> GetVisitsAsync(Guid propertyId,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db){var property=await db.Properties.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==propertyId);if(property is null)return Results.NotFound();var actor=await ActorAsync(http,users);if(!await CanViewAsync(property,actor,http.User,db))return Results.Forbid();var visits=await(from visit in db.PropertyVisits.AsNoTracking() join user in db.Users.AsNoTracking() on visit.AgentId equals user.Id where visit.PropertyId==propertyId orderby visit.VisitedAtUtc descending select new{visit.Id,visit.VisitedAtUtc,visit.Type,visit.Outcome,visit.ObservedSituation,visit.AccessDifficulty,visit.Note,visit.ArchivedAtUtc,visit.ConcurrencyToken,agentId=visit.AgentId,agentName=user.DisplayName}).ToListAsync();return Results.Ok(visits);}
     private static async Task<IResult> CreateVisitAsync(Guid propertyId,SaveVisitRequest request,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db){var property=await db.Properties.SingleOrDefaultAsync(x=>x.Id==propertyId&&x.ArchivedAtUtc==null);if(property is null)return Results.NotFound();var actor=await ActorAsync(http,users);if(!await CanManageAsync(property,actor,http.User,users,db))return Results.Forbid();var error=ValidateVisit(request,out var type,out var outcome,out var situation);if(error is not null)return error;var visit=PropertyVisit.Create(propertyId,property.HealthUnitId,actor.Id,request.VisitedAtUtc,type,outcome,situation,request.AccessDifficulty,request.Note);db.PropertyVisits.Add(visit);Audit(db,http,actor,"Create","PropertyVisit",visit.Id,$"Visita registrada no imóvel {property.HouseNumber}.");await db.SaveChangesAsync();return Results.Created($"/api/properties/{propertyId}/visits/{visit.Id}",new{visit.Id,visit.ConcurrencyToken});}

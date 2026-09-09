@@ -155,9 +155,48 @@ public static class TerritoryEndpoints
         var actor = await GetActorAsync(http, users); if (!await CanManageNeighborhoodAsync(id, actor, http.User, db)) return Results.Forbid();
         if (await db.Neighborhoods.AnyAsync(other => other.Id != id && EF.Functions.ILike(other.Name, request.Name.Trim()) && other.ArchivedAtUtc == null)) return Conflict("Bairro já cadastrado", "Já existe um bairro ativo com este nome.");
         var fit = await FitNeighborhoodAsync(geometry!, id, db); if (fit.IsEmpty) return Validation("geometry", "A área informada está totalmente coberta por bairros existentes.");
+        if (!item.Geometry.EqualsExact(fit.Geometry))
+        {
+            var impactError = await UpdateNeighborhoodLinksAsync(item, fit.Geometry!, actor, http, db);
+            if (impactError is not null) return impactError;
+        }
         item.Update(request.Name, fit.Geometry!, source, request.ExternalReference, color);
         var number = await NextNeighborhoodVersionAsync(id, db); db.NeighborhoodVersions.Add(NeighborhoodVersion.Capture(item, number, "Update", actor.Id)); AddAudit(db, http, actor, "Update", "Neighborhood", item.Id, $"Bairro {item.Name} atualizado.");
         await db.SaveChangesAsync(); return Results.Ok(new { item.ConcurrencyToken, geometry = item.Geometry, adjustedToExistingBoundaries = fit.Adjusted });
+    }
+
+    private static async Task<IResult?> UpdateNeighborhoodLinksAsync(Neighborhood neighborhood, Geometry candidate, ApplicationUser actor, HttpContext http, StuDbContext db)
+    {
+        var others = await db.Neighborhoods.AsNoTracking().Where(n => n.Id != neighborhood.Id && n.ArchivedAtUtc == null).ToListAsync();
+        var neighborhoods = others.Select(n => (n.Id, n.Geometry)).Append((Id: neighborhood.Id, Geometry: candidate)).ToArray();
+        var existingLinks = await db.MicroregionNeighborhoods.ToListAsync();
+        var linkedIds = existingLinks.Where(link => link.NeighborhoodId == neighborhood.Id).Select(link => link.MicroregionId).ToArray();
+        var microregions = await db.Microregions.Where(m => m.ArchivedAtUtc == null &&
+            (linkedIds.Contains(m.Id) || m.Boundary.Intersects(candidate))).ToListAsync();
+        var changes = new List<(Microregion Microregion, Guid[] NeighborhoodIds)>();
+        foreach (var micro in microregions)
+        {
+            var matches = neighborhoods.Where(n => MatchesNeighborhood(n.Geometry, micro.Boundary)).ToArray();
+            if (matches.Length == 0 || (matches.All(n => n.Geometry is Polygon or MultiPolygon) &&
+                !UnaryUnionOp.Union(matches.Select(n => n.Geometry).ToArray()).Covers(micro.Boundary)))
+                return Conflict("Microrregiões fora dos bairros", "O novo contorno deixaria uma microrregião ativa fora dos bairros cadastrados. Revise os limites das microrregiões antes de alterar este bairro.");
+            var ids = matches.Select(n => n.Id).Order().ToArray();
+            var previous = existingLinks.Where(link => link.MicroregionId == micro.Id).Select(link => link.NeighborhoodId).Order();
+            if (ids.SequenceEqual(previous)) continue;
+            if (!http.User.IsInRole(SystemRoles.GlobalAdministrator) && micro.HealthUnitId != actor.HealthUnitId) return Results.Forbid();
+            changes.Add((micro, ids));
+        }
+        // Validate all affected areas before changing any entity; SaveChanges commits the batch atomically.
+        foreach (var (micro, ids) in changes)
+        {
+            var links = existingLinks.Where(link => link.MicroregionId == micro.Id).ToArray();
+            db.MicroregionNeighborhoods.RemoveRange(links.Where(link => !ids.Contains(link.NeighborhoodId)));
+            db.MicroregionNeighborhoods.AddRange(ids.Where(id => !links.Any(link => link.NeighborhoodId == id)).Select(id => MicroregionNeighborhood.Create(micro.Id, id)));
+            micro.Update(micro.Code, micro.Name, micro.HealthUnitId, micro.AssignedAgentId, micro.Boundary, micro.Source, micro.Color);
+            db.MicroregionVersions.Add(MicroregionVersion.Capture(micro, ids, await NextMicroregionVersionAsync(micro.Id, db), "Update", actor.Id));
+            AddAudit(db, http, actor, "Update", "Microregion", micro.Id, "Bairros relacionados recalculados após edição do limite de bairro.");
+        }
+        return null;
     }
 
     private static async Task<IResult> ArchiveNeighborhoodAsync(Guid id, HttpContext http, UserManager<ApplicationUser> users, StuDbContext db) => await SetNeighborhoodArchivedAsync(id, true, http, users, db);
@@ -182,15 +221,21 @@ public static class TerritoryEndpoints
             if (current is null) return Results.NotFound();
             var actor = await GetActorAsync(http, users); var currentScope = ResolveScope(actor, http.User, current.HealthUnitId);
             if (currentScope.Error is not null || currentScope.HealthUnitId != current.HealthUnitId) return Results.Forbid();
+            if (request.ExpectedVersion != current.ConcurrencyToken) return Conflict("Cadastro alterado", "Recarregue os dados antes de validar novamente.");
             currentNeighborhoodIds = await db.MicroregionNeighborhoods.AsNoTracking().Where(item => item.MicroregionId == current.Id).Select(item => item.NeighborhoodId).Order().ToArrayAsync();
         }
         var validation = await ValidateMicroregionAsync(request, request.MicroregionId, http, users, db); if (validation.Error is not null) return validation.Error;
+        var impact = await GetPropertyImpactAsync(current, validation.HealthUnitId, request.AssignedAgentId, validation.Boundary!, db);
+        var canViewProperties = http.User.HasClaim(StuClaimTypes.Permission, StuPermissions.All) || http.User.HasClaim(StuClaimTypes.Permission, StuPermissions.PropertiesView);
         return Results.Ok(new
         {
-            valid = true,
+            valid = impact.BlockedCount == 0,
             adjustedToExistingBoundaries = validation.Adjusted,
-            conflicts = Array.Empty<object>(),
-            affectedProperties = Array.Empty<object>(),
+            conflicts = impact.BlockedCount == 0 ? Array.Empty<string>() : new[] { PropertyImpactMessage(impact.BlockedCount) },
+            affectedProperties = canViewProperties ? impact.Properties : [],
+            propertyDetailsVisible = canViewProperties,
+            affectedPropertyCount = impact.AffectedCount,
+            blockedPropertyCount = impact.BlockedCount,
             before = current is null ? (object?)null : new { current.Code, current.Name, neighborhoodIds = currentNeighborhoodIds, current.Color, geometry = current.Boundary },
             after = new { request.Code, request.Name, neighborhoodIds = validation.NeighborhoodIds, color = validation.Color, geometry = validation.Boundary },
         });
@@ -213,6 +258,8 @@ public static class TerritoryEndpoints
         var actor = await GetActorAsync(http, users); var currentScope = ResolveScope(actor, http.User, item.HealthUnitId); if (currentScope.Error is not null || currentScope.HealthUnitId != item.HealthUnitId) return Results.Forbid();
         if (request.ExpectedVersion != item.ConcurrencyToken) return Conflict("Cadastro alterado", "Recarregue os dados antes de editar novamente.");
         var validation = await ValidateMicroregionAsync(request, id, http, users, db); if (validation.Error is not null) return validation.Error;
+        var impact = await GetPropertyImpactAsync(item, validation.HealthUnitId, request.AssignedAgentId, validation.Boundary!, db);
+        if (impact.BlockedCount > 0) return Conflict("Imóveis afetados", PropertyImpactMessage(impact.BlockedCount));
         var previousAgentId = item.AssignedAgentId;
         item.Update(request.Code, request.Name, validation.HealthUnitId, request.AssignedAgentId, validation.Boundary!, validation.Source, validation.Color);
         var currentLinks = await db.MicroregionNeighborhoods.Where(link => link.MicroregionId == id).ToListAsync();
@@ -263,6 +310,22 @@ public static class TerritoryEndpoints
             .ToArrayAsync();
         if (activeNeighborhoodIds.Length != neighborhoodIds.Length)
             return Conflict("Bairro arquivado", "Reative os bairros relacionados ou edite o limite da microrregião antes de desarquivar.");
+        var neighborhoods = await db.Neighborhoods.AsNoTracking().Where(n => activeNeighborhoodIds.Contains(n.Id)).ToListAsync();
+        if (neighborhoods.Any(n => !MatchesNeighborhood(n.Geometry, item.Boundary)) ||
+            (neighborhoods.All(n => n.Geometry is Polygon or MultiPolygon) &&
+             !UnaryUnionOp.Union(neighborhoods.Select(n => n.Geometry).ToArray()).Covers(item.Boundary)))
+            return Conflict("Limites dos bairros alterados", "Edite o limite arquivado para atualizar os bairros relacionados antes de desarquivar.");
+        if (!await db.HealthUnits.AnyAsync(unit => unit.Id == item.HealthUnitId && unit.ArchivedAtUtc == null))
+            return Conflict("UBS indisponível", "A UBS precisa estar ativa antes de desarquivar a microrregião.");
+        if (item.AssignedAgentId.HasValue && !await (from user in db.Users
+                join link in db.UserRoles on user.Id equals link.UserId
+                join role in db.Roles on link.RoleId equals role.Id
+                where user.Id == item.AssignedAgentId && user.HealthUnitId == item.HealthUnitId && user.ArchivedAtUtc == null && role.Name == SystemRoles.HealthAgent
+                select user.Id).AnyAsync())
+            return Conflict("Agente indisponível", "Edite a microrregião e selecione um agente ativo da mesma UBS ou remova a atribuição antes de desarquivar.");
+        if (await db.Properties.AnyAsync(property => property.MicroregionId == item.Id && property.ArchivedAtUtc == null &&
+                (property.HealthUnitId != item.HealthUnitId || !item.Boundary.Covers(property.Geometry))))
+            return Conflict("Imóveis fora do limite", "O limite arquivado precisa conter todos os imóveis ativos vinculados antes de desarquivar.");
         var activeBoundaries = await db.Microregions.AsNoTracking()
             .Where(other => other.Id != item.Id && other.ArchivedAtUtc == null)
             .Select(other => other.Boundary)
@@ -283,6 +346,7 @@ public static class TerritoryEndpoints
         var parsed = ParseGeometry(request.Geometry); if (parsed.Error is not null) return MicroregionValidation.Fail(parsed.Error);
         var requestedBoundary = TerritoryBoundaryFitter.AsMultiPolygon(parsed.Geometry!); if (requestedBoundary is null) return MicroregionValidation.Fail(Validation("geometry", "A microrregião deve ser um polígono ou multipolígono."));
         var actor = await GetActorAsync(http, users); var scope = ResolveScope(actor, http.User, request.HealthUnitId); if (scope.Error is not null) return MicroregionValidation.Fail(scope.Error);
+        if (!await db.HealthUnits.AnyAsync(unit => unit.Id == scope.HealthUnitId && unit.ArchivedAtUtc == null)) return MicroregionValidation.Fail(Validation("healthUnitId", "Selecione uma UBS ativa."));
         var editingArchived = currentId.HasValue && await db.Microregions.AsNoTracking().AnyAsync(item => item.Id == currentId.Value && item.ArchivedAtUtc != null);
         var occupiedBoundaries = editingArchived
             ? []
@@ -314,6 +378,32 @@ public static class TerritoryEndpoints
         }
         return new(null, boundary, source, scope.HealthUnitId, neighborhoodIds, color, fit.Adjusted);
     }
+
+    private static async Task<PropertyImpact> GetPropertyImpactAsync(Microregion? current, Guid unitId, Guid? agentId, MultiPolygon boundary, StuDbContext db)
+    {
+        if (current is null) return new(0, 0, []);
+        var movingUnit = current.HealthUnitId != unitId;
+        var changingAgent = current.AssignedAgentId != agentId;
+        // Historical properties retain their UBS too; moving only the territory would break that link.
+        var affected = db.Properties.AsNoTracking().Where(property => property.MicroregionId == current.Id &&
+            (movingUnit || (property.ArchivedAtUtc == null && (changingAgent || !boundary.Covers(property.Geometry)))));
+        var count = await affected.CountAsync();
+        var blocked = await affected.CountAsync(property => movingUnit || (!current.IsArchived && !boundary.Covers(property.Geometry)));
+        var rows = await affected.OrderBy(property => property.Street).ThenBy(property => property.HouseNumber).ThenBy(property => property.Id)
+            .Take(100).Select(property => new
+            {
+                property.Id, property.Street, property.HouseNumber, property.FamilyNumber,
+                OutsideBoundary = !boundary.Covers(property.Geometry),
+            }).ToListAsync();
+        return new(count, blocked, rows.Select(property => new AffectedProperty(
+            property.Id, property.Street, property.HouseNumber, property.FamilyNumber,
+            movingUnit ? "Mudança de UBS exige transferência dos vínculos do imóvel." : property.OutsideBoundary
+                ? "Imóvel ficará fora do novo limite." : "Imóvel passará a ser atendido por outro responsável.")).ToArray());
+    }
+
+    private static string PropertyImpactMessage(int count) => $"{count} imóvel(is) ficariam fora do limite ou com a UBS incompatível. Revise o contorno ou regularize os vínculos dos imóveis antes de salvar. Nenhum imóvel foi transferido automaticamente.";
+    private sealed record PropertyImpact(int AffectedCount, int BlockedCount, AffectedProperty[] Properties);
+    private sealed record AffectedProperty(Guid Id, string Street, string HouseNumber, string FamilyNumber, string Reason);
 
     private static bool MatchesNeighborhood(Geometry neighborhood, MultiPolygon boundary)
     {

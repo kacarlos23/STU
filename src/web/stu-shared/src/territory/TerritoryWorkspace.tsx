@@ -14,6 +14,7 @@ import {
   type TerritoryGeometry,
 } from "./osmImport";
 import { TerritoryColorPicker } from "./TerritoryColorPicker";
+import { TerritoryImpactPanel, type TerritoryImpact } from "./TerritoryImpactPanel";
 import {
   editableVerticesFromGeometry,
   insertGeometryVertexNear,
@@ -118,7 +119,12 @@ export function TerritoryWorkspace({
   const [selectedOsmId, setSelectedOsmId] = useState("");
   const [focusedFeatureId, setFocusedFeatureId] = useState("");
   const [focusedGeometry, setFocusedGeometry] = useState<Geometry | null>(null);
-  const [previewed, setPreviewed] = useState(false);
+  const [previewed, setPreviewedState] = useState(false);
+  const [impact, setImpact] = useState<TerritoryImpact | null>(null);
+  const setPreviewed = useCallback((value: boolean) => {
+    setPreviewedState(value);
+    if (!value) setImpact(null);
+  }, []);
   const [addingVertex, setAddingVertex] = useState(false);
   const [history, setHistory] = useState<
     { versionNumber: number; changeKind: string; changedAtUtc: string }[] | null
@@ -735,7 +741,7 @@ export function TerritoryWorkspace({
             "/api/territories/microregions/preview",
             "POST",
             body,
-          )) as {
+          )) as TerritoryImpact & {
             adjustedToExistingBoundaries?: boolean;
             after?: { geometry?: Geometry };
           };
@@ -744,9 +750,12 @@ export function TerritoryWorkspace({
             setDraftPoints([]);
             focusGeometry(result.after.geometry);
           }
-          setPreviewed(true);
+          setPreviewed(result.valid);
+          setImpact(result);
           setNotice(
-            result.adjustedToExistingBoundaries
+            !result.valid
+              ? "A alteração possui impedimentos. Consulte os imóveis afetados abaixo."
+              : result.adjustedToExistingBoundaries
               ? "Pré-visualização ajustada às margens existentes. Confira o novo contorno antes de salvar."
               : "Pré-visualização validada: o limite já está encaixado.",
           );
@@ -968,12 +977,12 @@ export function TerritoryWorkspace({
           )}
         </div>
       </header>
-      {error && (
+      {error && !editor && (
         <div className="territory-message territory-error" role="alert">
           {error}
         </div>
       )}
-      {notice && (
+      {notice && !editor && (
         <div className="territory-message territory-success" role="status">
           {notice}
         </div>
@@ -1441,6 +1450,9 @@ export function TerritoryWorkspace({
                     : "Clique no mapa para iniciar o desenho"}
               </small>
             </div>
+            {error && <div className="territory-message territory-error" role="alert">{error}</div>}
+            {notice && <div className="territory-message" role="status">{notice}</div>}
+            {impact && <TerritoryImpactPanel impact={impact} />}
             <p className="territory-warning">
               Não inclua nomes de moradores, dados pessoais ou informações
               clínicas.

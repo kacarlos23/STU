@@ -68,3 +68,7 @@
   color: #176f5d;
   font-weight: 800;
 }
+.territory-impact { border: 1px solid #d7e1de; border-radius: .6rem; margin-top: .75rem; padding: .75rem; font-size: .75rem; }
+.territory-impact ol { max-height: 12rem; overflow: auto; padding-left: 1.5rem; }
+.territory-impact li { margin: .6rem 0; }
+.territory-impact li span { display: block; margin-top: .2rem; }

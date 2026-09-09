@@ -30,6 +30,8 @@
 
 ## Recommended next action
 
+The [08/09/2026 review](../functional-review/PROJECT_REVIEW_2026-09-08.md) corrected territorial impact, restoration, coverage and stale onboarding evidence. The current linked neighborhoods do not yet match the approved three-neighborhood pilot; operational acceptance remains pending.
+
 Execute the real three-neighborhood import/rehearsal, configure and verify the encrypted transfer to the external Windows computer, then conduct supervised accessibility, training, and user acceptance. The deployed release gate will refuse `go` until these mandatory inputs pass.
 
 ## Session log

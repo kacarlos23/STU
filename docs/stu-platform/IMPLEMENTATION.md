@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implementation is divided into independently verifiable phases. The current repository establishes Phase 1 only.
+Implementation is divided into independently verifiable phases. Phases 1–6 and the Phase 7 preparation controls are implemented; real-data rehearsal and operational acceptance remain pending. See the current review in `docs/functional-review/PROJECT_REVIEW_2026-09-08.md`.
 
 ## Phase summary
 
