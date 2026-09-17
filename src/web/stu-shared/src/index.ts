@@ -1,5 +1,6 @@
 export { AuthGate } from './auth/AuthGate'
 export { useAccessibleDialog } from './accessibility/useAccessibleDialog'
+export { InteractionProvider, useUiActions } from './interaction/InteractionProvider'
 export type {
   AuthenticatedContext,
   HealthUnit,

@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { TerritoryWorkspace } from "@stu/shared/territory";
-import type { Session } from "@stu/shared";
+import { InteractionProvider, type Session } from "@stu/shared";
 import "../../styles/global.css";
 
 const healthUnit = {
@@ -86,5 +86,5 @@ globalThis.fetch = async (input, init) => {
 };
 
 createRoot(document.getElementById("root")!).render(
-  <TerritoryWorkspace session={session} />,
+  <InteractionProvider><TerritoryWorkspace session={session} /></InteractionProvider>,
 );

@@ -37,6 +37,9 @@ describe('Acesso à administração global do STU', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Visão geral' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Imóveis' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Imóveis e visitas' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Abrir imóveis/ })).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: /UBS e territórios/ })[0])
     expect(await screen.findByRole('heading', { name: 'UBS cadastradas' })).toBeInTheDocument()
     const newUnit = screen.getByRole('button', { name: /Nova UBS/ })

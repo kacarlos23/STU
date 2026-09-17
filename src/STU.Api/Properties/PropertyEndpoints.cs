@@ -22,6 +22,7 @@ public static partial class PropertyEndpoints
         var read=endpoints.MapGroup("/api/properties").WithTags("Properties").RequireAuthorization(StuPolicies.PropertiesView).RequireRateLimiting("api");
         read.MapGet("",GetPropertiesAsync);read.MapGet("/map",GetPropertyMapAsync);read.MapGet("/reference-data",GetReferenceDataAsync);read.MapGet("/{id:guid}",GetPropertyAsync);read.MapGet("/{id:guid}/versions",GetVersionsAsync);
         var write=endpoints.MapGroup("/api/properties").WithTags("Properties").RequireAuthorization(StuPolicies.PropertiesManage).RequireRateLimiting("api");
+        write.MapGet("/address-suggestion", ReverseAddressAsync);
         Secure(write.MapPost("",CreatePropertyAsync));Secure(write.MapPut("/{id:guid}",UpdatePropertyAsync));Secure(write.MapPost("/{id:guid}/archive",ArchivePropertyAsync));Secure(write.MapPost("/{id:guid}/restore",RestorePropertyAsync));
         var visitRead=endpoints.MapGroup("/api/properties/{propertyId:guid}/visits").WithTags("Visits").RequireAuthorization(StuPolicies.VisitsView).RequireRateLimiting("api");visitRead.MapGet("",GetVisitsAsync);
         var visitWrite=endpoints.MapGroup("/api/properties/{propertyId:guid}/visits").WithTags("Visits").RequireAuthorization(StuPolicies.VisitsManage).RequireRateLimiting("api");
@@ -34,11 +35,15 @@ public static partial class PropertyEndpoints
 
     private static RouteHandlerBuilder Secure(RouteHandlerBuilder route)=>route.WithMetadata(new RequireAntiforgeryTokenAttribute(true));
 
-    private static async Task<IResult> GetPropertiesAsync(Guid? healthUnitId,string? query,Guid? microregionId,string? registrationStatus,string? coverage,bool includeArchived,int page,int pageSize,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)
+    private static async Task<IResult> GetPropertiesAsync(Guid? healthUnitId,string? query,Guid? microregionId,string? registrationStatus,string? coverage,string? recordState,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db,bool includeArchived=false,int page=1,int pageSize=100)
     {
         var actor=await ActorAsync(http,users);var scope=Scope(actor,http.User,healthUnitId);if(scope.Error is not null)return scope.Error;page=Math.Max(1,page);pageSize=Math.Clamp(pageSize==0?50:pageSize,1,100);
         var propertyQuery=db.Properties.AsNoTracking().Where(x=>x.HealthUnitId==scope.UnitId);
-        if(!includeArchived)propertyQuery=propertyQuery.Where(x=>x.ArchivedAtUtc==null);
+        if(string.IsNullOrWhiteSpace(recordState)) { if(!includeArchived)propertyQuery=propertyQuery.Where(x=>x.ArchivedAtUtc==null); }
+        else if(recordState=="active")propertyQuery=propertyQuery.Where(x=>x.ArchivedAtUtc==null&&x.RegistrationStatus==PropertyRegistrationStatus.Active);
+        else if(recordState=="draft")propertyQuery=propertyQuery.Where(x=>x.ArchivedAtUtc==null&&x.RegistrationStatus==PropertyRegistrationStatus.Draft);
+        else if(recordState=="archived")propertyQuery=propertyQuery.Where(x=>x.ArchivedAtUtc!=null);
+        else if(recordState!="all")return Results.ValidationProblem(new Dictionary<string,string[]>{{"recordState",["Use active, draft, archived ou all."]}});
         if(http.User.IsInRole(SystemRoles.HealthAgent))
         {
             var assignedMicroregions=await db.Microregions.AsNoTracking().Where(x=>x.AssignedAgentId==actor.Id&&x.ArchivedAtUtc==null).Select(x=>x.Id).ToArrayAsync();
@@ -51,8 +56,10 @@ public static partial class PropertyEndpoints
         var ids=properties.Select(x=>x.Id).ToArray();var lastVisits=await db.PropertyVisits.AsNoTracking().Where(x=>ids.Contains(x.PropertyId)&&x.ArchivedAtUtc==null).GroupBy(x=>x.PropertyId).Select(g=>new{PropertyId=g.Key,Last=g.Max(x=>x.VisitedAtUtc)}).ToDictionaryAsync(x=>x.PropertyId,x=>x.Last);
         var rules=await db.CoverageRules.AsNoTracking().Where(x=>x.HealthUnitId==scope.UnitId).ToDictionaryAsync(x=>x.MicroregionId,x=>x.MaxDaysWithoutVisit);var links=await LoadTagsAsync(ids,db);
         var projected=properties.Select(x=>Response(x,lastVisits.TryGetValue(x.Id,out var lastVisit)?lastVisit:null,rules.GetValueOrDefault(x.MicroregionId),links.GetValueOrDefault(x.Id,[]))).ToList();
-        if(!string.IsNullOrWhiteSpace(coverage))projected=projected.Where(x=>string.Equals(x.CoverageStatus,coverage,StringComparison.OrdinalIgnoreCase)).ToList();
-        return Results.Ok(new{items=projected.Skip((page-1)*pageSize).Take(pageSize),total=projected.Count,page,pageSize});
+        var coverageSummary=new { total=projected.Count, overdue=projected.Count(x=>x.CoverageStatus=="overdue"), neverVisited=projected.Count(x=>x.CoverageStatus=="neverVisited"), covered=projected.Count(x=>x.CoverageStatus=="covered"), notConfigured=projected.Count(x=>x.CoverageStatus=="notConfigured") };
+        if(coverage=="pending")projected=projected.Where(x=>x.CoverageStatus is "overdue" or "neverVisited").ToList();
+        else if(!string.IsNullOrWhiteSpace(coverage))projected=projected.Where(x=>string.Equals(x.CoverageStatus,coverage,StringComparison.OrdinalIgnoreCase)).ToList();
+        return Results.Ok(new{items=projected.Skip((page-1)*pageSize).Take(pageSize),total=projected.Count,page,pageSize,coverageSummary});
     }
 
     private static async Task<IResult> GetPropertyMapAsync(Guid? healthUnitId,HttpContext http,UserManager<ApplicationUser> users,StuDbContext db)

@@ -13,6 +13,10 @@ import "./properties.css";
 import "./property-editor.css";
 import "./property-prerequisite.css";
 import "./pagination.css";
+import "./workflow.css";
+import { useAddressSuggestion } from './useAddressSuggestion';
+import './address-suggestion.css';
+import { useUiActions, useUnsavedChanges, useSessionPreferences } from "../interaction/InteractionProvider";
 import type { Session } from "../auth/types";
 import { useAccessibleDialog } from "../accessibility/useAccessibleDialog";
 import {
@@ -81,7 +85,10 @@ type Version = {
   familyNumber: string;
 };
 type Unit = { id: string; code: string; name: string };
-type View = "properties" | "visits" | "settings";
+type View = "properties" | "settings";
+type RecordState = "active" | "draft" | "archived" | "all";
+type CoverageSummary = { total: number; overdue: number; neverVisited: number; covered: number; notConfigured: number };
+type Preferences = { unitId: string; view: View; query: string; microregionId: string; coverage: string; recordState: RecordState; page: number; selectedId: string; createHandled: number };
 
 const rasterTilesUrl =
   import.meta.env.VITE_STU_RASTER_TILES_URL ||
@@ -91,29 +98,40 @@ const emptyPoint: [number, number] = [-39.7419, -17.5394];
 export function PropertyWorkspace({
   session,
   global = false,
-  initialView = "properties",
+  mode = "properties",
+  createRequest = 0,
   onOpenTerritory,
 }: {
   session: Session;
   global?: boolean;
-  initialView?: "properties" | "visits";
+  mode?: "properties" | "coverage";
+  createRequest?: number;
   onOpenTerritory?: () => void;
 }) {
-  const [view, setView] = useState<View>(initialView);
+  const { guard, confirm } = useUiActions();
+  const [preferences, setPreferences] = useSessionPreferences<Preferences>(`properties:${mode}`, {
+    unitId: session.healthUnit?.id ?? "", view: "properties", query: "", microregionId: "",
+    coverage: mode === "coverage" ? "pending" : "", recordState: "active", page: 1, selectedId: "", createHandled: 0,
+  });
+  const [view, setView] = useState<View>(preferences.view);
+  const [recordState, setRecordState] = useState<RecordState>(preferences.recordState);
+  const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null);
+  const [createHandled, setCreateHandled] = useState(preferences.createHandled);
+  const loadSequence = useRef(0);
   const [units, setUnits] = useState<Unit[]>(
     session.healthUnit ? [session.healthUnit] : [],
   );
-  const [unitId, setUnitId] = useState(session.healthUnit?.id ?? "");
+  const [unitId, setUnitId] = useState(preferences.unitId);
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [properties, setProperties] = useState<PropertyItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(preferences.selectedId);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
-  const [query, setQuery] = useState("");
-  const [queryInput, setQueryInput] = useState("");
-  const [microregionId, setMicroregionId] = useState("");
-  const [coverage, setCoverage] = useState("");
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(preferences.query);
+  const [queryInput, setQueryInput] = useState(preferences.query);
+  const [microregionId, setMicroregionId] = useState(preferences.microregionId);
+  const [coverage, setCoverage] = useState(preferences.coverage);
+  const [page, setPage] = useState(preferences.page);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<PropertyItem | "new" | null>(null);
   const [visitEditor, setVisitEditor] = useState<Visit | "new" | null>(null);
@@ -133,15 +151,20 @@ export function PropertyWorkspace({
     session.permissions.includes("*") ||
     session.permissions.includes("territory.manage");
 
+  useEffect(() => {
+    setPreferences({ unitId, view, query: queryInput, microregionId, coverage, recordState, page, selectedId, createHandled });
+  }, [unitId, view, queryInput, microregionId, coverage, recordState, page, selectedId, createHandled, setPreferences]);
+
   const load = useCallback(
     async (selectedUnit: string) => {
       if (!selectedUnit) return;
+      const sequence = ++loadSequence.current;
       setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams({
           healthUnitId: selectedUnit,
-          includeArchived: "true",
+          recordState: mode === "coverage" ? "active" : recordState,
           pageSize: "100",
           page: String(page),
         });
@@ -162,22 +185,27 @@ export function PropertyWorkspace({
         const result = (await propertyResponse.json()) as {
           items: PropertyItem[];
           total: number;
+          coverageSummary?: CoverageSummary;
         };
+        const referenceData = (await referenceResponse.json()) as ReferenceData;
+        if (sequence !== loadSequence.current) return;
         setProperties(result.items);
         setTotal(result.total);
-        setReference((await referenceResponse.json()) as ReferenceData);
+        setReference(referenceData);
+        setCoverageSummary(result.coverageSummary ?? null);
+        if (page > Math.max(1, Math.ceil(result.total / 100))) setPage(Math.max(1, Math.ceil(result.total / 100)));
         setSelectedId((current) =>
           result.items.some((item) => item.id === current)
             ? current
             : (result.items[0]?.id ?? ""),
         );
       } catch (caught) {
-        setError(messageOf(caught, "Falha ao carregar os imóveis."));
+        if (sequence === loadSequence.current) setError(messageOf(caught, "Falha ao carregar os imóveis."));
       } finally {
-        setLoading(false);
+        if (sequence === loadSequence.current) setLoading(false);
       }
     },
-    [coverage, microregionId, page, query],
+    [coverage, microregionId, page, query, mode, recordState],
   );
 
   useEffect(() => {
@@ -196,15 +224,26 @@ export function PropertyWorkspace({
 
   useEffect(() => {
     void load(unitId);
+    return () => { loadSequence.current++; };
   }, [load, unitId]);
   useEffect(() => {
+    if (!createRequest || createRequest <= createHandled || !reference || loading) return;
+    setCreateHandled(createRequest);
+    if (canManageProperties && reference.microregions.length) { setView("properties"); setEditing("new"); }
+    else if (canManageProperties) setNotice("Cadastre uma microrregião antes de incluir o primeiro imóvel.");
+  }, [createRequest, createHandled, reference, loading, canManageProperties]);
+  useEffect(() => {
+    if (queryInput.trim() === query) return;
     const timer = window.setTimeout(() => {
       setPage(1);
       setQuery(queryInput.trim());
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [queryInput]);
+  }, [queryInput, query]);
   useEffect(() => {
+    let active = true;
+    setVisits([]);
+    setVersions([]);
     if (!selectedId) {
       setVisits([]);
       setVersions([]);
@@ -218,12 +257,12 @@ export function PropertyWorkspace({
     ])
       .then(async ([visitResponse, versionResponse]) => {
         if (!visitResponse.ok || !versionResponse.ok) throw new Error();
-        setVisits((await visitResponse.json()) as Visit[]);
-        setVersions((await versionResponse.json()) as Version[]);
+        const visitData = (await visitResponse.json()) as Visit[];
+        const versionData = (await versionResponse.json()) as Version[];
+        if (active) { setVisits(visitData); setVersions(versionData); }
       })
-      .catch(() =>
-        setError("Não foi possível carregar o histórico do imóvel."),
-      );
+      .catch(() => { if (active) setError("Não foi possível carregar o histórico do imóvel."); });
+    return () => { active = false; };
   }, [selectedId]);
 
   const filtered = properties;
@@ -231,11 +270,7 @@ export function PropertyWorkspace({
 
   async function archiveProperty(item: PropertyItem) {
     const action = item.archivedAtUtc ? "reativar" : "arquivar";
-    if (
-      !confirm(
-        `Deseja ${action} o imóvel ${item.houseNumber}? O histórico será preservado.`,
-      )
-    )
+    if (!await confirm({ title: `${item.archivedAtUtc ? "Reativar" : "Arquivar"} imóvel?`, message: `Imóvel ${item.houseNumber}, família ${item.familyNumber}. O histórico será preservado.`, confirmLabel: item.archivedAtUtc ? "Reativar" : "Arquivar" }))
       return;
     try {
       setLoading(true);
@@ -253,6 +288,7 @@ export function PropertyWorkspace({
   }
 
   async function toggleVisit(visit: Visit) {
+    if (!await confirm({ title: `${visit.archivedAtUtc ? "Reativar" : "Arquivar"} visita?`, message: "O registro continuará disponível no histórico do imóvel.", confirmLabel: visit.archivedAtUtc ? "Reativar" : "Arquivar" })) return;
     try {
       await mutate(
         `/api/properties/${selectedId}/visits/${visit.id}/${visit.archivedAtUtc ? "restore" : "archive"}`,
@@ -261,7 +297,9 @@ export function PropertyWorkspace({
       const response = await fetch(`/api/properties/${selectedId}/visits`, {
         credentials: "include",
       });
-      if (response.ok) setVisits((await response.json()) as Visit[]);
+      if (!response.ok) throw new Error("Não foi possível atualizar o histórico da visita.");
+      setVisits((await response.json()) as Visit[]);
+      await load(unitId);
       setNotice(
         visit.archivedAtUtc ? "Visita reativada." : "Visita arquivada.",
       );
@@ -276,11 +314,9 @@ export function PropertyWorkspace({
         <div>
           <span>Operação territorial</span>
           <h2>
-            {view === "visits"
-              ? "Visitas aos imóveis"
-              : view === "settings"
+            {view === "settings"
                 ? "Cobertura e rótulos"
-                : "Cadastro de imóveis"}
+                : mode === "coverage" ? "Pendências de cobertura" : "Cadastro de imóveis"}
           </h2>
           <p>
             Somente dados do imóvel e da operação — sem moradores ou informações
@@ -293,7 +329,15 @@ export function PropertyWorkspace({
               UBS
               <select
                 value={unitId}
-                onChange={(event) => setUnitId(event.target.value)}
+                onChange={(event) => {
+                  const nextUnit = event.target.value;
+                  void guard(() => {
+                    loadSequence.current++;
+                    setProperties([]); setReference(null); setCoverageSummary(null);
+                    setSelectedId(""); setMicroregionId(""); setQueryInput(""); setQuery(""); setPage(1);
+                    setUnitId(nextUnit);
+                  });
+                }}
               >
                 {units.map((unit) => (
                   <option key={unit.id} value={unit.id}>
@@ -306,30 +350,22 @@ export function PropertyWorkspace({
           <button
             aria-pressed={view === "properties"}
             className={view === "properties" ? "active" : ""}
-            onClick={() => setView("properties")}
+            onClick={() => { if (view !== "properties") void guard(() => setView("properties")); }}
             type="button"
           >
-            Imóveis
-          </button>
-          <button
-            aria-pressed={view === "visits"}
-            className={view === "visits" ? "active" : ""}
-            onClick={() => setView("visits")}
-            type="button"
-          >
-            Visitas
+            {mode === "coverage" ? "Pendências" : "Imóveis"}
           </button>
           {canManageSettings && (
             <button
               aria-pressed={view === "settings"}
               className={view === "settings" ? "active" : ""}
-              onClick={() => setView("settings")}
+              onClick={() => { if (view !== "settings") void guard(() => setView("settings")); }}
               type="button"
             >
               Configurar
             </button>
           )}
-          {canManageProperties && view !== "settings" && (
+          {canManageProperties && mode === "properties" && view !== "settings" && (
             <button
               className="property-primary"
               disabled={loading || !reference?.microregions.length}
@@ -345,7 +381,7 @@ export function PropertyWorkspace({
       {error && (
         <div className="property-message property-error" role="alert">
           {error}
-          <button onClick={() => setError(null)} type="button">
+          <button aria-label="Dispensar erro" onClick={() => setError(null)} type="button">
             ×
           </button>
         </div>
@@ -368,12 +404,22 @@ export function PropertyWorkspace({
       )}
       {view === "settings" ? (
         <Settings
+          key={unitId}
           unitId={unitId}
           reference={reference}
           reload={() => load(unitId)}
         />
       ) : (
         <>
+          {mode === "coverage" && <section className="coverage-summary" aria-label="Resumo da cobertura">
+            <p>Imóveis ativos da UBS ou das áreas autorizadas. As contagens respeitam a busca e a microrregião, antes do filtro de cobertura.</p>
+            <div>{([
+              ["pending", "Pendentes", (coverageSummary?.overdue ?? 0) + (coverageSummary?.neverVisited ?? 0)],
+              ["overdue", "Fora do prazo", coverageSummary?.overdue],
+              ["neverVisited", "Nunca visitados", coverageSummary?.neverVisited],
+              ["covered", "Em dia", coverageSummary?.covered],
+            ] as const).map(([filter, label, count]) => <button key={filter} type="button" aria-label={`${coverageSummary ? count : "—"} ${label}`} aria-pressed={coverage === filter} onClick={() => { setCoverage(filter); setPage(1); }}><strong>{coverageSummary ? count : "—"}</strong><span>{label}</span></button>)}</div>
+          </section>}
           <section className="property-stats">
             <span>
               <strong>{total}</strong> resultados
@@ -413,6 +459,7 @@ export function PropertyWorkspace({
             </section>
           )}
           <div className="property-filters">
+            {mode === "properties" && <select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select>}
             <input
               aria-label="Buscar imóvel"
               onChange={(event) => setQueryInput(event.target.value)}
@@ -443,6 +490,7 @@ export function PropertyWorkspace({
               value={coverage}
             >
               <option value="">Toda cobertura</option>
+              <option value="pending">Pendentes: sem visita ou fora do prazo</option>
               <option value="overdue">Fora do prazo</option>
               <option value="neverVisited">Nunca visitado</option>
               <option value="covered">Em dia</option>
@@ -525,6 +573,10 @@ export function PropertyWorkspace({
                       )}
                     </div>
                   </header>
+                  <section className="property-last-visit" aria-label="Última visita do imóvel">
+                    <div><span>Última visita</span><strong>{selected.lastVisitAtUtc ? new Date(selected.lastVisitAtUtc).toLocaleString("pt-BR") : "Nenhuma visita registrada"}</strong><small>{translateCoverage(selected.coverageStatus)}</small></div>
+                    {canManageVisits && !selected.archivedAtUtc && <button className="property-primary" type="button" onClick={() => setVisitEditor("new")}>Registrar visita</button>}
+                  </section>
                   <div className="property-facts">
                     <span>
                       <small>Situação</small>
@@ -569,15 +621,7 @@ export function PropertyWorkspace({
                         <span>Histórico operacional</span>
                         <h4>Visitas registradas</h4>
                       </div>
-                      {canManageVisits && !selected.archivedAtUtc && (
-                        <button
-                          className="property-primary"
-                          onClick={() => setVisitEditor("new")}
-                          type="button"
-                        >
-                          ＋ Registrar visita
-                        </button>
-                      )}
+
                     </div>
                     {visits.length === 0 && (
                       <p>Nenhuma visita registrada para este imóvel.</p>
@@ -730,7 +774,10 @@ function PropertyEditor({
 }) {
   const editing = item === "new" ? null : item;
   const titleId = useId();
-  const dialogRef = useAccessibleDialog<HTMLFormElement>(true, onCancel);
+  const { guard, confirm } = useUiActions();
+  const [dirty, setDirty] = useState(false);
+  function requestClose() { if (!saving) void guard(onCancel); }
+  const dialogRef = useAccessibleDialog<HTMLFormElement>(true, requestClose);
   const firstMicroregion =
     reference.microregions.find(
       (microregion) => microregion.id === editing?.microregionId,
@@ -751,8 +798,32 @@ function PropertyEditor({
   const pointIsInside =
     point !== null && geometryContainsPoint(selectedBoundary, point);
 
+  const [street, setStreet] = useState(editing?.street ?? '');
+  const [postalCode, setPostalCode] = useState(editing?.postalCode ?? '');
+  const [addressEnabled, setAddressEnabled] = useState(true);
+  const [addressRevision, setAddressRevision] = useState(0);
+  const address = useAddressSuggestion(point, selectedMicroregionId, addressRevision, addressEnabled && pointIsInside && !saving);
+  useEffect(() => {
+    if (!address.result?.found) return;
+    const suggestion = address.result;
+    setStreet(current => current.trim() ? current : suggestion.street ?? '');
+    setPostalCode(current => current.trim() ? current : suggestion.postalCode ?? '');
+    setDirty(true);
+  }, [address.result]);
+  async function applyAddress() {
+    const suggestion = address.result;
+    if (!suggestion?.found) return;
+    if (!await confirm({ title: 'Usar endereço sugerido?', message: 'O logradouro e o CEP retornados pela consulta substituirão os respectivos campos. Confira a sugestão antes de salvar o imóvel.', confirmLabel: 'Usar sugestão' })) return;
+    if (suggestion.street) setStreet(suggestion.street);
+    if (suggestion.postalCode) setPostalCode(suggestion.postalCode);
+    setDirty(true);
+  }
+
+  useUnsavedChanges(dirty || selectedMicroregionId !== (firstMicroregion?.id ?? "") || JSON.stringify(point) !== JSON.stringify(initialPoint));
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     setError(null);
     setFormError(null);
     if (!point) {
@@ -800,13 +871,14 @@ function PropertyEditor({
       className="property-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onCancel();
+        if (event.currentTarget === event.target) requestClose();
       }}
     >
       <form
         aria-labelledby={titleId}
         aria-modal="true"
         className="property-modal"
+        onChangeCapture={() => setDirty(true)}
         onSubmit={(event) => void submit(event)}
         ref={dialogRef}
         role="dialog"
@@ -819,7 +891,7 @@ function PropertyEditor({
           </div>
           <button
             aria-label="Fechar cadastro de imóvel"
-            onClick={onCancel}
+            onClick={requestClose}
             type="button"
           >
             ×
@@ -853,7 +925,8 @@ function PropertyEditor({
               <label className="wide">
                 Logradouro
                 <input
-                  defaultValue={editing?.street}
+                  value={street}
+                  onChange={event => setStreet(event.target.value)}
                   maxLength={180}
                   name="street"
                   required
@@ -880,7 +953,8 @@ function PropertyEditor({
               <label>
                 CEP
                 <input
-                  defaultValue={editing?.postalCode ?? ""}
+                  value={postalCode}
+                  onChange={event => setPostalCode(event.target.value)}
                   maxLength={16}
                   name="postalCode"
                 />
@@ -929,6 +1003,7 @@ function PropertyEditor({
                 boundary={selectedBoundary}
                 onPoint={(nextPoint) => {
                   setPoint(nextPoint);
+                  setAddressRevision(current => current + 1);
                   setFormError(null);
                 }}
                 point={point}
@@ -951,6 +1026,14 @@ function PropertyEditor({
                     : "O ponto está fora da microrregião. Reposicione o marcador."}
               </div>
             </div>
+            <section className="property-address-suggestion" aria-label="Endereço sugerido pelo mapa">
+              <label><input type="checkbox" checked={addressEnabled} onChange={event => setAddressEnabled(event.target.checked)} /> Buscar endereço ao marcar no mapa</label>
+              <p>A consulta envia somente as coordenadas ao provedor. Número da casa e da família continuam manuais. Bairros e microrregiões seguem os limites do STU.</p>
+              <p>Endereços: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noreferrer">Regras de uso do Nominatim</a>.</p>
+              {address.status && <p role="status" aria-live="polite">{address.status}</p>}
+              {address.result?.found && <div><p><strong>Logradouro:</strong> {address.result.street || 'Não encontrado'}<br /><strong>CEP:</strong> {address.result.postalCode || 'Não encontrado'}</p><button type="button" disabled={saving} onClick={() => void applyAddress()}>Usar endereço sugerido</button></div>}
+              {addressEnabled && pointIsInside && <button type="button" disabled={address.loading || saving} onClick={() => setAddressRevision(current => current + 1)}>{address.loading ? 'Consultando…' : 'Consultar endereço novamente'}</button>}
+            </section>
             {reference.tags.length > 0 && (
               <fieldset className="property-tag-field">
                 <legend>Rótulos operacionais</legend>
@@ -980,7 +1063,7 @@ function PropertyEditor({
               </p>
             )}
             <footer>
-              <button disabled={saving} onClick={onCancel} type="button">
+              <button disabled={saving} onClick={requestClose} type="button">
                 Cancelar
               </button>
               <button
@@ -1013,9 +1096,17 @@ function VisitEditor({
 }) {
   const editing = item === "new" ? null : item;
   const titleId = useId();
-  const dialogRef = useAccessibleDialog<HTMLFormElement>(true, onCancel);
+  const { guard } = useUiActions();
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  useUnsavedChanges(dirty);
+  function requestClose() { if (!saving) void guard(onCancel); }
+  const dialogRef = useAccessibleDialog<HTMLFormElement>(true, requestClose);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true); setFormError(null); setError(null);
     const fields = new FormData(event.currentTarget);
     try {
       await mutate(
@@ -1035,7 +1126,9 @@ function VisitEditor({
       );
       await onSaved();
     } catch (caught) {
-      setError(messageOf(caught, "Não foi possível salvar a visita."));
+      setFormError(messageOf(caught, "Não foi possível salvar a visita."));
+    } finally {
+      setSaving(false);
     }
   }
   const date = editing ? new Date(editing.visitedAtUtc) : new Date();
@@ -1046,7 +1139,7 @@ function VisitEditor({
     <div
       className="property-modal-backdrop"
       onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onCancel();
+        if (event.currentTarget === event.target) requestClose();
       }}
       role="presentation"
     >
@@ -1054,6 +1147,7 @@ function VisitEditor({
         aria-labelledby={titleId}
         aria-modal="true"
         className="property-modal visit-modal"
+        onChangeCapture={() => setDirty(true)}
         onSubmit={(event) => void submit(event)}
         ref={dialogRef}
         role="dialog"
@@ -1072,7 +1166,7 @@ function VisitEditor({
           </div>
           <button
             aria-label="Fechar registro de visita"
-            onClick={onCancel}
+            onClick={requestClose}
             type="button"
           >
             ×
@@ -1146,12 +1240,13 @@ function VisitEditor({
           Não registre nome, CPF, telefone, e-mail, condição de saúde ou
           qualquer dado de morador.
         </p>
+        {formError && <p className="property-message property-error" role="alert">{formError}</p>}
         <footer>
-          <button onClick={onCancel} type="button">
+          <button disabled={saving} onClick={requestClose} type="button">
             Cancelar
           </button>
-          <button className="property-primary" type="submit">
-            Salvar visita
+          <button className="property-primary" disabled={saving} type="submit">
+            {saving ? "Salvando…" : "Salvar visita"}
           </button>
         </footer>
       </form>
@@ -1168,6 +1263,9 @@ function Settings({
   reference: ReferenceData | null;
   reload: () => Promise<void>;
 }) {
+  const { confirm } = useUiActions();
+  const [tagDirty, setTagDirty] = useState(false);
+  useUnsavedChanges(tagDirty);
   const [tags, setTags] = useState<Tag[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1176,7 +1274,7 @@ function Settings({
     fetch(`/api/property-settings/tags?healthUnitId=${unitId}`, {
       credentials: "include",
     })
-      .then((response) => response.json())
+      .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
       .then(setTags)
       .catch(() => setError("Não foi possível carregar os rótulos."));
   }, [unitId, reference]);
@@ -1190,7 +1288,7 @@ function Settings({
         name: String(fields.get("name")),
         color: String(fields.get("color")),
       });
-      form.reset();
+      form.reset(); setTagDirty(false);
       setNotice("Rótulo criado.");
       await reload();
     } catch (caught) {
@@ -1198,6 +1296,7 @@ function Settings({
     }
   }
   async function toggleTag(tag: Tag) {
+    if (!await confirm({ title: `${tag.archivedAtUtc ? "Reativar" : "Arquivar"} rótulo?`, message: `Rótulo ${tag.name}. Os vínculos históricos serão preservados.`, confirmLabel: tag.archivedAtUtc ? "Reativar" : "Arquivar" })) return;
     try {
       await mutate(
         `/api/property-settings/tags/${tag.id}/${tag.archivedAtUtc ? "restore" : "archive"}`,
@@ -1217,8 +1316,10 @@ function Settings({
       });
       setNotice("Prazo de cobertura atualizado.");
       await reload();
+      return true;
     } catch (caught) {
       setError(messageOf(caught, "Não foi possível salvar o prazo."));
+      return false;
     }
   }
   return (
@@ -1241,7 +1342,7 @@ function Settings({
             <p>Use termos gerais, nunca dados pessoais.</p>
           </div>
         </header>
-        <form className="tag-create" onSubmit={(event) => void addTag(event)}>
+        <form className="tag-create" onChangeCapture={() => setTagDirty(true)} onSubmit={(event) => void addTag(event)}>
           <input
             aria-label="Nome do rótulo operacional"
             maxLength={80}
@@ -1306,9 +1407,18 @@ function CoverageRow({
 }: {
   microregion: Microregion;
   initial: number;
-  save: (id: string, days: number) => Promise<void>;
+  save: (id: string, days: number) => Promise<boolean>;
 }) {
   const [days, setDays] = useState(initial);
+  const [savedDays, setSavedDays] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  useUnsavedChanges(days !== savedDays);
+  async function submit() {
+    if (saving || !Number.isInteger(days) || days < 1 || days > 730) return;
+    setSaving(true);
+    try { if (await save(microregion.id, days)) setSavedDays(days); }
+    finally { setSaving(false); }
+  }
   return (
     <div>
       <span>
@@ -1319,6 +1429,7 @@ function CoverageRow({
       </span>
       <label>
         <input
+          aria-label={`Prazo sem visita em ${microregion.name}`}
           max={730}
           min={1}
           onChange={(event) => setDays(Number(event.target.value))}
@@ -1327,8 +1438,8 @@ function CoverageRow({
         />{" "}
         dias
       </label>
-      <button onClick={() => void save(microregion.id, days)} type="button">
-        Salvar
+      <button disabled={saving || !Number.isInteger(days) || days < 1 || days > 730} onClick={() => void submit()} type="button">
+        {saving ? "Salvando…" : "Salvar"}
       </button>
     </div>
   );
@@ -1539,6 +1650,8 @@ function messageOf(value: unknown, fallback: string) {
   return value instanceof Error ? value.message : fallback;
 }
 async function mutate(path: string, method: "POST" | "PUT", body?: unknown) {
+  if (!navigator.onLine)
+    throw new Error("Sem conexão. Reconecte-se antes de salvar imóveis ou visitas.");
   const csrf = await fetch("/api/auth/csrf", { credentials: "include" });
   if (!csrf.ok) throw new Error("Sua sessão precisa ser renovada.");
   const { token } = (await csrf.json()) as { token: string };

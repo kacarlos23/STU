@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+const dialogStack: symbol[] = []
+
 const focusableSelector = [
   'a[href]',
   'button:not([disabled])',
@@ -19,6 +21,8 @@ export function useAccessibleDialog<T extends HTMLElement = HTMLElement>(active:
 
   useEffect(() => {
     if (!active) return
+    const dialogId = Symbol('dialog')
+    dialogStack.push(dialogId)
 
     const previousFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -29,6 +33,7 @@ export function useAccessibleDialog<T extends HTMLElement = HTMLElement>(active:
     })
 
     function onKeyDown(event: KeyboardEvent) {
+      if (dialogStack.at(-1) !== dialogId) return
       if (event.key === 'Escape') {
         event.preventDefault()
         closeRef.current()
@@ -59,6 +64,8 @@ export function useAccessibleDialog<T extends HTMLElement = HTMLElement>(active:
     document.addEventListener('keydown', onKeyDown)
     return () => {
       window.cancelAnimationFrame(frame)
+      const index = dialogStack.indexOf(dialogId)
+      if (index >= 0) dialogStack.splice(index, 1)
       document.removeEventListener('keydown', onKeyDown)
       previousFocus?.focus()
     }

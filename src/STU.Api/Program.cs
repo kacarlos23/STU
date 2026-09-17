@@ -39,6 +39,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 builder.Services.AddApplication();
+builder.Services.AddHttpClient("Geocoding", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+    client.MaxResponseContentBufferSize = 65536;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("STU/1.0 (+https://stu.laudaapp.com)");
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddSingleton<IAddressLookup, AddressLookup>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddIdentityInfrastructure();
 builder.Services.AddAntiforgery(options =>

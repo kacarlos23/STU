@@ -19,6 +19,39 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
     private static readonly GeometryFactory GeometryFactory = new(new PrecisionModel(), 4326);
 
     [Fact]
+    public async Task AddressSuggestionRequiresAuthorizedMicroregionAndValidPoint()
+    {
+        var setup = await CreateSetupAsync(includeAgent: true);
+        var path = $"/api/properties/address-suggestion?microregionId={setup.MicroregionId}&latitude=-23.5&longitude=-46.5";
+        using var client = CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+        await LoginAsync(client, setup.AgentName!, setup.Password);
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        var suggestion = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(suggestion.GetProperty("found").GetBoolean());
+        Assert.Equal("Rua de teste", suggestion.GetProperty("street").GetString());
+        var lookup = (TestAddressLookup)factory.Services.GetRequiredService<STU.Api.Properties.IAddressLookup>();
+        var calls = lookup.Calls;
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(path.Replace(setup.MicroregionId.ToString(), setup.OtherMicroregionId.ToString()))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path.Replace("latitude=-23.5", "latitude=91"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path.Replace("latitude=-23.5", "latitude=NaN"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path.Replace("longitude=-46.5", "longitude=-39.5"))).StatusCode);
+        using var other = CreateClient();
+        await LoginAsync(other, setup.OtherManagerName, setup.Password);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync(path)).StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var readerName = $"reader.{Guid.NewGuid():N}";
+        await CreateUserAsync(users, readerName, setup.Password, setup.UnitId, SystemRoles.Receptionist);
+        using var reader = CreateClient();
+        await LoginAsync(reader, readerName, setup.Password);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.GetAsync(path)).StatusCode);
+        Assert.Equal(calls, lookup.Calls);
+    }
+
+    [Fact]
     public async Task ManagerCanReassignIdentifiersAndRecordStructuredVisitWithoutCrossUnitExposure()
     {
         var setup = await CreateSetupAsync(includeAgent: false);
@@ -74,6 +107,53 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         var microregions = reference.GetProperty("microregions");
         Assert.Single(microregions.EnumerateArray());
         Assert.Equal(setup.MicroregionId, microregions[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task LifecycleFiltersAndCoverageSummaryRespectScopeAndPagination()
+    {
+        var setup = await CreateSetupAsync(includeAgent: false);
+        using var client = CreateClient();
+        await LoginAsync(client, setup.ManagerName, setup.Password);
+        var ids = new List<Guid>();
+        for (var index = 0; index < 4; index++)
+        {
+            var body = JsonSerializer.SerializeToNode(PropertyBody(setup.MicroregionId, setup.UnitId, $"{index + 50}", $"FILTER-{index}"))!;
+            if (index == 3) body["registrationStatus"] = "Draft";
+            using var created = await SendWithCsrfAsync(client, HttpMethod.Post, "/api/properties", body);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            ids.Add((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        }
+        using var archived = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/properties/{ids[2]}/archive", null);
+        Assert.Equal(HttpStatusCode.NoContent, archived.StatusCode);
+        using var rule = await SendWithCsrfAsync(client, HttpMethod.Put, $"/api/property-settings/coverage/{setup.MicroregionId}", new { healthUnitId = setup.UnitId, maxDaysWithoutVisit = 90 });
+        Assert.True(rule.IsSuccessStatusCode);
+        using var visit = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/properties/{ids[1]}/visits", VisitBody("Acesso liberado."));
+        Assert.Equal(HttpStatusCode.Created, visit.StatusCode);
+
+        foreach (var (state, count) in new[] { ("active", 2), ("draft", 1), ("archived", 1), ("all", 4) })
+        {
+            var result = await client.GetFromJsonAsync<JsonElement>($"/api/properties?recordState={state}&page=1&pageSize=1");
+            Assert.Equal(count, result.GetProperty("total").GetInt32());
+            Assert.Single(result.GetProperty("items").EnumerateArray());
+        }
+        var pending = await client.GetFromJsonAsync<JsonElement>("/api/properties?recordState=active&coverage=pending&page=1&pageSize=1");
+        Assert.Equal(1, pending.GetProperty("total").GetInt32());
+        Assert.Equal(ids[0], pending.GetProperty("items")[0].GetProperty("id").GetGuid());
+        var summary = pending.GetProperty("coverageSummary");
+        Assert.Equal(2, summary.GetProperty("total").GetInt32());
+        Assert.Equal(1, summary.GetProperty("neverVisited").GetInt32());
+        Assert.Equal(1, summary.GetProperty("covered").GetInt32());
+        var searched = await client.GetFromJsonAsync<JsonElement>("/api/properties?recordState=active&query=FILTER-1");
+        Assert.Equal(1, searched.GetProperty("coverageSummary").GetProperty("total").GetInt32());
+        using var invalid = await client.GetAsync("/api/properties?recordState=invalid");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var other = CreateClient();
+        await LoginAsync(other, setup.OtherManagerName, setup.Password);
+        var otherResult = await other.GetFromJsonAsync<JsonElement>("/api/properties?recordState=all&coverage=pending");
+        Assert.Equal(0, otherResult.GetProperty("total").GetInt32());
+        Assert.Equal(0, otherResult.GetProperty("coverageSummary").GetProperty("total").GetInt32());
     }
 
     private async Task<TestSetup> CreateSetupAsync(bool includeAgent)

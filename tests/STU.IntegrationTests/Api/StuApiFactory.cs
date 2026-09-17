@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using STU.Infrastructure.Persistence;
 using STU.Domain.HealthUnits;
 using Testcontainers.PostgreSql;
+using STU.Api.Properties;
 
 namespace STU.IntegrationTests.Api;
 
@@ -62,6 +63,8 @@ public sealed class StuApiFactory : WebApplicationFactory<Program>, IAsyncLifeti
         });
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<IAddressLookup>();
+            services.AddSingleton<IAddressLookup, TestAddressLookup>();
             services.RemoveAll<IDbContextOptionsConfiguration<StuDbContext>>();
             services.RemoveAll<DbContextOptions<StuDbContext>>();
             services.RemoveAll<StuDbContext>();
@@ -70,6 +73,16 @@ public sealed class StuApiFactory : WebApplicationFactory<Program>, IAsyncLifeti
                     database.GetConnectionString(),
                     npgsql => npgsql.UseNetTopologySuite()));
         });
+    }
+}
+
+public sealed class TestAddressLookup : IAddressLookup
+{
+    public int Calls { get; private set; }
+    public Task<AddressLookupResult> ReverseAsync(double latitude, double longitude, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Task.FromResult(new AddressLookupResult(new AddressSuggestion("Rua de teste", "45990-000")));
     }
 }
 

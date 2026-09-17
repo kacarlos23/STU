@@ -35,6 +35,8 @@ services:
       ConnectionStrings__StuDatabase: ${STU_DB_CONNECTION:?Define STU_DB_CONNECTION before starting STU}
       Database__ApplyMigrations: "true"
       Database__MaximumPoolSize: "80"
+      Geocoding__Enabled: ${STU_GEOCODING_ENABLED:-true}
+      Geocoding__BaseUrl: ${STU_GEOCODING_BASE_URL:-https://nominatim.openstreetmap.org/}
       Operations__StoragePath: /operations
       Cors__AllowedOrigins__0: http://localhost:${STU_GATEWAY_PORT:-8088}
     ports:

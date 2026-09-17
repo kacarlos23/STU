@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 
 describe('Acesso ao STU', () => {
-  afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true }) })
 
   it('exibe o login quando não há uma sessão ativa', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
@@ -43,6 +43,40 @@ describe('Acesso ao STU', () => {
     expect(screen.getByRole('option', { name: 'Agente de saúde' })).toBeInTheDocument()
   })
 
+  it('unifica a navegação em Imóveis e mantém o histórico e o registro de visitas', async () => {
+    const property = { id: 'property-id', healthUnitId: 'unit-id', microregionId: 'micro-id', street: 'Rua de teste', houseNumber: '12', familyNumber: '34', postalCode: null, complement: null, geometry: { type: 'Point', coordinates: [-39.7419, -17.5394] }, registrationStatus: 'Active', situation: 'Occupied', concurrencyToken: 'property-version', archivedAtUtc: null, lastVisitAtUtc: null, coverageStatus: 'neverVisited', tags: [] }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/api/auth/me') return Promise.resolve(jsonResponse(managerSession()))
+      if (path === '/api/dashboard/summary') return Promise.resolve(jsonResponse({ healthUnitName: 'UBS Piloto' }))
+      if (path.startsWith('/api/properties?')) return Promise.resolve(jsonResponse({ items: [property], total: 1 }))
+      if (path.startsWith('/api/properties/reference-data?')) return Promise.resolve(jsonResponse({ selectedHealthUnitId: 'unit-id', microregions: [{ id: 'micro-id', code: 'MR01', name: 'Área de teste', assignedAgentId: null, boundary: null }], tags: [], coverageRules: [] }))
+      if (path === '/api/properties/property-id/visits') return Promise.resolve(jsonResponse([{ id: 'visit-id', visitedAtUtc: '2026-09-08T12:00:00Z', type: 'Routine', outcome: 'Completed', observedSituation: 'Occupied', accessDifficulty: false, note: 'Acesso liberado', archivedAtUtc: null, concurrencyToken: 'visit-version', agentName: 'Agente de teste' }]))
+      if (path === '/api/properties/property-id/versions') return Promise.resolve(jsonResponse([]))
+      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    }))
+
+    render(<App />)
+    const nav = await screen.findByRole('navigation', { name: 'Navegação principal' })
+    expect(within(nav).getAllByRole('button', { name: 'Imóveis' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
+    fireEvent.click(within(nav).getByRole('button', { name: 'Imóveis' }))
+    expect(await screen.findByText(/Acesso liberado/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Imóveis' })).toHaveFocus()
+    expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Imóveis' })).toHaveAttribute('aria-current', 'page')
+
+    fireEvent.click(screen.getByRole('button', { name: /Registrar visita/ }))
+    expect(screen.getByRole('dialog', { name: 'Registrar visita operacional' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar registro de visita' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }))
+    expect(screen.getByRole('heading', { name: 'Cobertura e rótulos' })).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Imóveis' }))
+    expect(screen.getByRole('heading', { name: 'Visitas registradas' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Registrar visita/ })).toBeEnabled()
+  })
+
   it('explica a dependência territorial quando ainda não existe microrregião para o imóvel', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
@@ -59,7 +93,24 @@ describe('Acesso ao STU', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Imóveis' }))
     expect(await screen.findByRole('heading', { level: 3, name: 'Cadastre uma microrregião antes do primeiro imóvel' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Ir para o mapa territorial/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Cadastrar imóvel/ })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
+  })
+
+  it('exibe tendências reais e bloqueia cadastro quando o navegador está offline', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false })
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/api/auth/me') return Promise.resolve(jsonResponse(managerSession()))
+      if (path === '/api/dashboard/summary') return Promise.resolve(jsonResponse({ healthUnitName: 'UBS Piloto', activeProperties: 12, activeFamilyIdentifiers: 10, visitsThisMonth: 6, visitsPreviousMonth: 4, visitsChangePercent: 50, coverageAlerts: 3, unassignedMicroregions: 1, coverage: { covered: 9, overdue: 2, neverVisited: 1, notConfigured: 0 }, microregions: [], stage: 'Operação ativa' }))
+      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    }))
+
+    render(<App />)
+    expect(await screen.findByText('+50% em relação ao mês anterior')).toBeInTheDocument()
+    expect(screen.getByText(/Você está sem conexão/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByText('10 identificações familiares')).toBeInTheDocument()
   })
 })
 

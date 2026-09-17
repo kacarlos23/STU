@@ -8,6 +8,8 @@ import "./territory-drawing.css";
 import "./territory-archive.css";
 import type { Session } from "../auth/types";
 import { useAccessibleDialog } from "../accessibility/useAccessibleDialog";
+import { useUiActions, useUnsavedChanges } from "../interaction/InteractionProvider";
+import { TerritoryComparison } from "./TerritoryComparison";
 import {
   parseOsmAreas,
   type OsmAreaCandidate,
@@ -46,6 +48,10 @@ type ReferenceData = {
 };
 type Unit = { id: string; code: string; name: string };
 type EditorKind = "neighborhood" | "microregion";
+type TerritorySummary = {
+  coverage: { covered: number; overdue: number; neverVisited: number; notConfigured: number };
+  microregions: { id: string; code: string; name: string; color: string; assigned: boolean; activeProperties: number; covered: number; alerts: number }[];
+};
 
 export const mapLibreWorkerUrl = workerUrl;
 maplibregl.setWorkerUrl(mapLibreWorkerUrl);
@@ -92,6 +98,9 @@ export function TerritoryWorkspace({
   session: Session;
   global?: boolean;
 }) {
+  const { guard, confirm } = useUiActions();
+  const [formDirty, setFormDirty] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const mapNode = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [units, setUnits] = useState<Unit[]>(
@@ -108,6 +117,8 @@ export function TerritoryWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [summary, setSummary] = useState<TerritorySummary | null>(null);
+  const [layerVisibility, setLayerVisibility] = useState({ neighborhoods: true, microregions: true, properties: true });
   const [editor, setEditor] = useState<EditorKind | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [draftGeometry, setDraftGeometry] = useState<Geometry | null>(null);
@@ -130,6 +141,11 @@ export function TerritoryWorkspace({
     { versionNumber: number; changeKind: string; changedAtUtc: string }[] | null
   >(null);
   const editorTitleId = useId();
+  useUnsavedChanges(Boolean(editor) && (formDirty || draftPoints.length > 0 ||
+    JSON.stringify(draftGeometry) !== JSON.stringify(editing?.geometry ?? null) ||
+    territorySource !== String(editing?.properties.source ?? "Manual") ||
+    externalReference !== String(editing?.properties.externalReference ?? "") ||
+    territoryColor !== String(editing?.properties.color ?? (editor === "neighborhood" ? "#2e8b72" : "#4f9a7d"))));
   const editorDialogRef = useAccessibleDialog<HTMLFormElement>(
     Boolean(editor),
     cancel,
@@ -231,6 +247,16 @@ export function TerritoryWorkspace({
   }, [load, unitId]);
 
   useEffect(() => {
+    if (!unitId) return;
+    let active = true;
+    fetch(`/api/dashboard/summary?healthUnitId=${encodeURIComponent(unitId)}`, { credentials: "include" })
+      .then(async (response) => response.ok ? await response.json() as TerritorySummary : null)
+      .then((value) => { if (active) setSummary(value); })
+      .catch(() => { if (active) setSummary(null); });
+    return () => { active = false; };
+  }, [unitId]);
+
+  useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapNode.current,
@@ -241,6 +267,13 @@ export function TerritoryWorkspace({
     });
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
+    map.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: false,
+      }),
       "top-right",
     );
     map.on("load", () => {
@@ -309,6 +342,26 @@ export function TerritoryWorkspace({
         paint: {
           "line-color": territoryColorExpression("#244f45"),
           "line-width": 2,
+          "line-dasharray": [4, 2],
+        },
+      });
+      map.addLayer({
+        id: "microregion-label",
+        type: "symbol",
+        source: "territories",
+        minzoom: 11,
+        filter: ["==", ["get", "entityType"], "microregion"],
+        layout: {
+          "symbol-placement": "point",
+          "text-field": ["coalesce", ["get", "code"], ["get", "name"]],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 11,
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": "#173f37",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 2,
         },
       });
       map.addLayer({
@@ -472,6 +525,17 @@ export function TerritoryWorkspace({
     const map = mapRef.current;
     if (!map) return;
     const update = () => {
+      setLayerGroupVisibility(map, ["neighborhood-fill", "neighborhood-line", "neighborhood-point"], layerVisibility.neighborhoods);
+      setLayerGroupVisibility(map, ["microregion-fill", "microregion-line", "microregion-label"], layerVisibility.microregions);
+      setLayerGroupVisibility(map, ["property-fill", "property-line", "property-point", "property-label"], layerVisibility.properties);
+    };
+    map.isStyleLoaded() ? update() : map.once("load", update);
+  }, [layerVisibility]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const update = () => {
       setGeoJsonSourceData(map, "territories", data);
       setFocusedFeatureId("");
       setFocusedGeometry(null);
@@ -610,7 +674,11 @@ export function TerritoryWorkspace({
     setAddingVertex(false);
   }
 
-  function start(kind: EditorKind, feature?: Feature) {
+  function start(kind: EditorKind, feature?: Feature) { if (!loading) void guard(() => beginEditor(kind, feature)); }
+
+  function beginEditor(kind: EditorKind, feature?: Feature) {
+    setFormDirty(false);
+    setComparing(false);
     setFocusedGeometry(null);
     setEditor(kind);
     setEditing(feature ?? null);
@@ -633,7 +701,11 @@ export function TerritoryWorkspace({
     setNotice(null);
   }
 
-  function cancel() {
+  function cancel() { if (!loading) void guard(closeEditor); }
+
+  function closeEditor() {
+    setFormDirty(false);
+    setComparing(false);
     setEditor(null);
     setEditing(null);
     setDraftGeometry(null);
@@ -671,6 +743,7 @@ export function TerritoryWorkspace({
     method: "POST" | "PUT",
     body?: unknown,
   ) {
+    if (!navigator.onLine) throw new Error("Sem conexão. Reconecte-se antes de salvar alterações territoriais.");
     const csrf = await fetch("/api/auth/csrf", { credentials: "include" });
     if (!csrf.ok) throw new Error("Sua sessão precisa ser renovada.");
     const { token } = (await csrf.json()) as { token: string };
@@ -781,7 +854,7 @@ export function TerritoryWorkspace({
             : "Microrregião salva, auditada e versionada.",
         );
       }
-      cancel();
+      closeEditor();
       await load(unitId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao salvar.");
@@ -791,11 +864,7 @@ export function TerritoryWorkspace({
   }
 
   async function archive(feature: Feature) {
-    if (
-      !confirm(
-        `Arquivar ${String(feature.properties.name)}? O histórico será preservado.`,
-      )
-    )
+    if (!await confirm({ title: "Arquivar área?", message: `${String(feature.properties.name)}. O histórico será preservado e a área poderá ser consultada posteriormente.`, confirmLabel: "Arquivar" }))
       return;
     try {
       setLoading(true);
@@ -813,11 +882,7 @@ export function TerritoryWorkspace({
   }
 
   async function restore(feature: Feature) {
-    if (
-      !confirm(
-        `Desarquivar ${String(feature.properties.name)}? O sistema verificará identificadores, bairros e limites antes de reativar.`,
-      )
-    )
+    if (!await confirm({ title: "Desarquivar microrregião?", message: `${String(feature.properties.name)}. O sistema verificará identificadores, bairros e limites antes de reativar.`, confirmLabel: "Desarquivar" }))
       return;
     try {
       setLoading(true);
@@ -951,7 +1016,11 @@ export function TerritoryWorkspace({
               UBS
               <select
                 value={unitId}
-                onChange={(event) => setUnitId(event.target.value)}
+                disabled={loading}
+                onChange={(event) => {
+                  const nextUnit = event.target.value;
+                  void guard(() => { closeEditor(); setUnitId(nextUnit); });
+                }}
               >
                 {units.map((unit) => (
                   <option key={unit.id} value={unit.id}>
@@ -987,6 +1056,13 @@ export function TerritoryWorkspace({
           {notice}
         </div>
       )}
+      <div className="territory-view-tools" aria-label="Camadas visíveis" role="group">
+        <strong>Camadas</strong>
+        <label><input checked={layerVisibility.neighborhoods} onChange={(event) => setLayerVisibility(value => ({ ...value, neighborhoods: event.target.checked }))} type="checkbox" /> Bairros</label>
+        <label><input checked={layerVisibility.microregions} onChange={(event) => setLayerVisibility(value => ({ ...value, microregions: event.target.checked }))} type="checkbox" /> Microrregiões</label>
+        <label><input checked={layerVisibility.properties} onChange={(event) => setLayerVisibility(value => ({ ...value, properties: event.target.checked }))} type="checkbox" /> Imóveis e cobertura</label>
+        <span className="territory-layer-help">O limite tracejado identifica microrregiões sem depender apenas da cor.</span>
+      </div>
       <div className="territory-layout">
         <div
           aria-label="Mapa territorial interativo. Os bairros e microrregiões também estão disponíveis na lista ao lado."
@@ -1001,6 +1077,10 @@ export function TerritoryWorkspace({
           {loading && <i>Atualizando…</i>}
         </div>
         <aside className="territory-list">
+          <section className="territory-coverage-summary" aria-label="Resumo de cobertura">
+            <div><span>Em dia<strong>{summary?.coverage?.covered ?? 0}</strong></span><span>Alertas<strong>{(summary?.coverage?.overdue ?? 0) + (summary?.coverage?.neverVisited ?? 0)}</strong></span></div>
+            <div className="territory-legend"><span><i className="territory-legend__area" />Área</span><span><i className="territory-legend__boundary" />Microrregião</span><span><i className="territory-legend__property" />Imóvel</span></div>
+          </section>
           <div>
             <strong>Bairros</strong>
             <span>{neighborhoods.length} ativo(s)</span>
@@ -1157,6 +1237,11 @@ export function TerritoryWorkspace({
                     : "Sem agente"}{" "}
                   · clique para visualizar
                 </small>
+                {summary?.microregions?.find(item => item.id === feature.id) && (() => {
+                  const item = summary.microregions.find(value => value.id === feature.id)!;
+                  const rate = item.activeProperties === 0 ? 0 : Math.round(item.covered * 100 / item.activeProperties);
+                  return <div className="territory-coverage-row"><span><i style={{ width: `${rate}%` }} /></span><small>{rate}% em dia · {item.alerts} alerta(s)</small></div>;
+                })()}
                 {typeof feature.properties.archivedAtUtc === "string" && (
                   <small>
                     Arquivada em{" "}
@@ -1238,10 +1323,12 @@ export function TerritoryWorkspace({
           role="presentation"
         >
           <form
+            key={editing?.id ?? "new"}
             aria-labelledby={editorTitleId}
             aria-modal="true"
             className="territory-editor"
             onChange={() => {
+              setFormDirty(true);
               if (editor === "microregion") setPreviewed(false);
             }}
             onSubmit={(event) => void submit(event)}
@@ -1453,6 +1540,8 @@ export function TerritoryWorkspace({
             {error && <div className="territory-message territory-error" role="alert">{error}</div>}
             {notice && <div className="territory-message" role="status">{notice}</div>}
             {impact && <TerritoryImpactPanel impact={impact} />}
+            {editing && draftGeometry && <button type="button" onClick={() => setComparing(true)}>Comparar limites</button>}
+            {comparing && editing && draftGeometry && <TerritoryComparison before={editing.geometry} after={draftGeometry} validated={Boolean(impact)} onClose={() => setComparing(false)} />}
             <p className="territory-warning">
               Não inclua nomes de moradores, dados pessoais ou informações
               clínicas.
@@ -1596,4 +1685,10 @@ export function setGeoJsonSourceData(
     );
   if (map.getSource(sourceId)) update();
   else map.once("load", update);
+}
+
+function setLayerGroupVisibility(map: MapLibreMap, layerIds: string[], visible: boolean) {
+  for (const layerId of layerIds) {
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+  }
 }

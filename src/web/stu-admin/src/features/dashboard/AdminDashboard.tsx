@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import type { AuthenticatedContext } from '@stu/shared'
+import { InteractionProvider, useUiActions, type AuthenticatedContext } from '@stu/shared'
 import { AuditManager, BackupsManager, HealthUnitsManager, RolesManager, UsersManager } from '../administration/ManagementSections'
 import { MonitoringSection } from '../administration/MonitoringSection'
 
@@ -34,13 +34,14 @@ const PilotReleaseWorkspace = lazy(async () => {
 })
 
 type AdminOverview = { activeHealthUnits: number; activeUsers: number; pendingPasswordChanges: number; activeRoles: number }
-type Section = 'overview' | 'health-units' | 'territories' | 'operations' | 'workflows' | 'onboarding' | 'pilot-release' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
+type Section = 'overview' | 'health-units' | 'territories' | 'operations' | 'coverage' | 'workflows' | 'onboarding' | 'pilot-release' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
 
 const navigation: { id: Section; icon: string; label: string }[] = [
   { id: 'overview', icon: '⌂', label: 'Visão geral' },
   { id: 'health-units', icon: '▣', label: 'UBS e territórios' },
   { id: 'territories', icon: '◇', label: 'Mapa territorial' },
-  { id: 'operations', icon: '▦', label: 'Imóveis e visitas' },
+  { id: 'operations', icon: '▦', label: 'Imóveis' },
+  { id: 'coverage', icon: '◫', label: 'Cobertura' },
   { id: 'workflows', icon: '⇄', label: 'Arquivos e dados' },
   { id: 'onboarding', icon: '✓', label: 'Pré-implantação' },
   { id: 'pilot-release', icon: '◆', label: 'Liberação do piloto' },
@@ -54,7 +55,7 @@ const navigation: { id: Section; icon: string; label: string }[] = [
 const areas: { section: Section; icon: string; title: string; description: string; action: string }[] = [
   { section: 'health-units', icon: '▣', title: 'UBS e territórios', description: 'Cadastre unidades e acompanhe a distribuição das áreas.', action: 'Gerenciar UBS' },
   { section: 'territories', icon: '◇', title: 'Mapa territorial', description: 'Importe bairros, desenhe microrregiões e atribua agentes.', action: 'Gerenciar territórios' },
-  { section: 'operations', icon: '▦', title: 'Imóveis e visitas', description: 'Consulte e administre os cadastros operacionais de qualquer UBS.', action: 'Abrir operação' },
+  { section: 'operations', icon: '▦', title: 'Imóveis', description: 'Consulte e administre imóveis e suas visitas em qualquer UBS.', action: 'Abrir imóveis' },
   { section: 'users', icon: '◎', title: 'Usuários', description: 'Crie contas, redefina senhas e transfira servidores.', action: 'Gerenciar usuários' },
   { section: 'roles', icon: '◇', title: 'Funções e permissões', description: 'Crie novas funções e determine cada permissão.', action: 'Configurar acessos' },
   { section: 'backups', icon: '↻', title: 'Backups', description: 'Execute cópias manuais e ajuste a rotina semanal.', action: 'Gerenciar backups' },
@@ -65,8 +66,14 @@ const areas: { section: Section; icon: string; title: string; description: strin
   { section: 'health-units', icon: '⇄', title: 'Importações', description: 'Importe limites e referências do OpenStreetMap.', action: 'Após cadastrar UBS' },
 ]
 
-export function AdminDashboard({ session, logout }: AuthenticatedContext) {
-  const [section, setSection] = useState<Section>('overview')
+export function AdminDashboard(props: AuthenticatedContext) {
+  return <InteractionProvider key={`${props.session.id}:${props.session.healthUnit?.id ?? 'global'}`}><AdminDashboardContent {...props} /></InteractionProvider>
+}
+
+function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
+  const { guard } = useUiActions()
+  const [section, changeSection] = useState<Section>('overview')
+  function setSection(next: Section) { if (next !== section) void guard(() => changeSection(next)) }
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -98,7 +105,7 @@ export function AdminDashboard({ session, logout }: AuthenticatedContext) {
         <nav aria-label="Navegação administrativa">
           {navigation.map((item) => <button aria-current={item.id === section ? 'page' : undefined} className={item.id === section ? 'admin-nav-active' : ''} key={item.id} onClick={() => navigate(item.id)} type="button"><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
         </nav>
-        <div className="admin-account"><span>{session.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{session.displayName}</strong><small>Administrador global</small></div><button aria-label="Sair do painel" onClick={() => void logout()} type="button">↗</button></div>
+        <div className="admin-account"><span>{session.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{session.displayName}</strong><small>Administrador global</small></div><button aria-label="Sair do painel" onClick={() => void guard(() => { void logout() })} type="button">↗</button></div>
       </aside>
 
       <main className="admin-main" id="admin-main-content">
@@ -107,7 +114,7 @@ export function AdminDashboard({ session, logout }: AuthenticatedContext) {
         {section === 'overview' && <Overview overview={overview} onNavigate={navigate} />}
         {section === 'health-units' && <HealthUnitsManager onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'territories' && <Suspense fallback={<div className="admin-error">Carregando o mapa…</div>}><TerritoryWorkspace global session={session} /></Suspense>}
-        {section === 'operations' && <Suspense fallback={<div className="admin-error">Carregando os cadastros…</div>}><PropertyWorkspace global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
+        {(section === 'operations' || section === 'coverage') && <Suspense fallback={<div className="admin-error">Carregando os cadastros…</div>}><PropertyWorkspace key={section} mode={section === 'coverage' ? 'coverage' : 'properties'} global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
         {section === 'workflows' && <Suspense fallback={<div className="admin-error">Carregando os fluxos operacionais…</div>}><OperationalWorkspace global session={session} /></Suspense>}
         {section === 'onboarding' && <Suspense fallback={<div className="admin-error">Verificando a pré-implantação…</div>}><OnboardingWorkspace global session={session} /></Suspense>}
         {section === 'pilot-release' && <Suspense fallback={<div className="admin-error">Conferindo a liberação…</div>}><PilotReleaseWorkspace global session={session} /></Suspense>}
