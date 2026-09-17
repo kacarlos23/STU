@@ -33,6 +33,21 @@ describe('Acesso ao STU', () => {
 
     render(<App />)
     expect(await screen.findByRole('heading', { name: /Bom trabalho/ })).toBeInTheDocument()
+    const navigation = screen.getByRole('navigation', { name: 'Navegação principal' })
+    expect(within(navigation).getByRole('button', { name: 'Território' })).toBeInTheDocument()
+    expect(within(navigation).queryByText('Operação')).not.toBeInTheDocument()
+    expect(screen.getByText(/Território,\s*mais saúde\s*para todos\./)).toBeInTheDocument()
+    expect(screen.getByText('UBS-PILOTO · Município de Teixeira de Freitas')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar imóvel, família ou endereço' })).toBeInTheDocument()
+    const profileMenu = screen.getByLabelText('Menu do usuário')
+    fireEvent.click(profileMenu)
+    expect(screen.getByRole('menuitem', { name: 'Sair do STU' })).toBeInTheDocument()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menuitem', { name: 'Sair do STU' })).not.toBeInTheDocument()
+    fireEvent.click(profileMenu)
+    expect(screen.getByRole('menuitem', { name: 'Sair do STU' })).toBeInTheDocument()
+    fireEvent.click(profileMenu)
+    expect(screen.queryByRole('menuitem', { name: 'Sair do STU' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Servidores' }))
     expect(await screen.findByRole('heading', { level: 2, name: 'Servidores cadastrados' })).toBeInTheDocument()
     expect(await screen.findAllByText('Gerente da UBS')).not.toHaveLength(0)
@@ -43,7 +58,7 @@ describe('Acesso ao STU', () => {
     expect(screen.getByRole('option', { name: 'Agente de saúde' })).toBeInTheDocument()
   })
 
-  it('unifica a navegação em Imóveis e mantém o histórico e o registro de visitas', async () => {
+  it('unifica imóveis e cobertura mantendo cadastro, histórico e visitas', async () => {
     const property = { id: 'property-id', healthUnitId: 'unit-id', microregionId: 'micro-id', street: 'Rua de teste', houseNumber: '12', familyNumber: '34', postalCode: null, complement: null, geometry: { type: 'Point', coordinates: [-39.7419, -17.5394] }, registrationStatus: 'Active', situation: 'Occupied', concurrencyToken: 'property-version', archivedAtUtc: null, lastVisitAtUtc: null, coverageStatus: 'neverVisited', tags: [] }
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
@@ -59,20 +74,23 @@ describe('Acesso ao STU', () => {
 
     render(<App />)
     const nav = await screen.findByRole('navigation', { name: 'Navegação principal' })
-    expect(within(nav).getAllByRole('button', { name: 'Imóveis' })).toHaveLength(1)
+    expect(within(nav).getAllByRole('button', { name: 'Cobertura' })).toHaveLength(1)
+    expect(within(nav).queryByRole('button', { name: 'Imóveis' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
-    fireEvent.click(within(nav).getByRole('button', { name: 'Imóveis' }))
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar imóvel, família ou endereço' }), { target: { value: 'Rua de teste' } })
+    fireEvent.submit(screen.getByRole('form', { name: 'Busca geral' }))
     expect(await screen.findByText(/Acesso liberado/)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1, name: 'Imóveis' })).toHaveFocus()
+    expect(screen.getAllByDisplayValue('Rua de teste')).toHaveLength(2)
+    expect(screen.getByRole('heading', { level: 1, name: 'Cobertura' })).toHaveFocus()
     expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
-    expect(within(nav).getByRole('button', { name: 'Imóveis' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('button', { name: 'Cobertura' })).toHaveAttribute('aria-current', 'page')
 
     fireEvent.click(screen.getByRole('button', { name: /Registrar visita/ }))
     expect(screen.getByRole('dialog', { name: 'Registrar visita operacional' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Fechar registro de visita' }))
     fireEvent.click(screen.getByRole('button', { name: 'Configurar' }))
     expect(screen.getByRole('heading', { name: 'Cobertura e rótulos' })).toBeInTheDocument()
-    fireEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Imóveis' }))
+    fireEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Cobertura' }))
     expect(screen.getByRole('heading', { name: 'Visitas registradas' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Registrar visita/ })).toBeEnabled()
   })
@@ -90,7 +108,7 @@ describe('Acesso ao STU', () => {
 
     render(<App />)
     expect(await screen.findByRole('heading', { name: /Bom trabalho/ })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Imóveis' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cobertura' }))
     expect(await screen.findByRole('heading', { level: 3, name: 'Cadastre uma microrregião antes do primeiro imóvel' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Ir para o mapa territorial/ })).toBeEnabled()
     expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)

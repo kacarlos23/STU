@@ -35,6 +35,16 @@ textarea {
   font: inherit;
 }
 
+:where(button, summary, select, label, legend, [role="button"], [role="menuitem"], nav, header, h1, h2, h3, h4, h5, h6, .sidebar, .territory-view-tools) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .map-shell {
   background: #dce9e4;
   border: 1px solid #c1d8d1;

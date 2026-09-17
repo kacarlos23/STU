@@ -62,7 +62,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 async function openProperties() {
   render(<App />)
   const nav = await screen.findByRole('navigation', { name: 'Navegação principal' })
-  fireEvent.click(within(nav).getByRole('button', { name: 'Imóveis' }))
+  fireEvent.click(within(nav).getByRole('button', { name: 'Cobertura' }))
   await screen.findByRole('heading', { name: 'Rua de teste, 12' })
   return nav
 }
@@ -130,7 +130,7 @@ describe('Melhorias operacionais', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('query=Rua'))).toBe(true))
     fireEvent.click(within(screen.getByLabelText('Imóveis encontrados')).getByRole('button', { name: /Rua de teste, 14/ }))
     fireEvent.click(within(nav).getByRole('button', { name: 'Visão geral' }))
-    fireEvent.click(within(nav).getByRole('button', { name: 'Imóveis' }))
+    fireEvent.click(within(nav).getByRole('button', { name: 'Cobertura' }))
     await screen.findByRole('heading', { name: 'Rua de teste, 14' })
     expect(screen.getByLabelText('Buscar imóvel')).toHaveValue('Rua')
     expect(screen.getByLabelText('Filtrar microrregião')).toHaveValue('micro')
@@ -158,12 +158,13 @@ describe('Melhorias operacionais', () => {
     expect(cleanUnload.defaultPrevented).toBe(false)
   })
 
-  it('mostra pendências de cobertura em uma seção própria e permite filtrar', async () => {
+  it('unifica imóveis e cobertura mantendo resumo e filtros operacionais', async () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Cobertura' }))
-    await screen.findByRole('heading', { name: 'Pendências de cobertura' })
-    expect(screen.getByLabelText('Filtrar cobertura')).toHaveValue('pending')
-    expect(screen.queryByLabelText('Situação do cadastro')).not.toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Imóveis e cobertura' })
+    expect(screen.getByLabelText('Filtrar cobertura')).toHaveValue('')
+    expect(screen.getByLabelText('Situação do cadastro')).toHaveValue('active')
+    expect(screen.getByRole('button', { name: /Cadastrar imóvel/ })).toBeInTheDocument()
     const summary = screen.getByRole('region', { name: 'Resumo da cobertura' })
     await waitFor(() => expect(within(summary).getByRole('button', { name: '2 Pendentes' })).toBeInTheDocument())
     fireEvent.click(within(summary).getByRole('button', { name: '1 Fora do prazo' }))

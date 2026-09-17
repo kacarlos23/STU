@@ -34,13 +34,12 @@ const PilotReleaseWorkspace = lazy(async () => {
 })
 
 type AdminOverview = { activeHealthUnits: number; activeUsers: number; pendingPasswordChanges: number; activeRoles: number }
-type Section = 'overview' | 'health-units' | 'territories' | 'operations' | 'coverage' | 'workflows' | 'onboarding' | 'pilot-release' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
+type Section = 'overview' | 'health-units' | 'territories' | 'coverage' | 'workflows' | 'onboarding' | 'pilot-release' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
 
 const navigation: { id: Section; icon: string; label: string }[] = [
   { id: 'overview', icon: '⌂', label: 'Visão geral' },
   { id: 'health-units', icon: '▣', label: 'UBS e territórios' },
   { id: 'territories', icon: '◇', label: 'Mapa territorial' },
-  { id: 'operations', icon: '▦', label: 'Imóveis' },
   { id: 'coverage', icon: '◫', label: 'Cobertura' },
   { id: 'workflows', icon: '⇄', label: 'Arquivos e dados' },
   { id: 'onboarding', icon: '✓', label: 'Pré-implantação' },
@@ -55,7 +54,7 @@ const navigation: { id: Section; icon: string; label: string }[] = [
 const areas: { section: Section; icon: string; title: string; description: string; action: string }[] = [
   { section: 'health-units', icon: '▣', title: 'UBS e territórios', description: 'Cadastre unidades e acompanhe a distribuição das áreas.', action: 'Gerenciar UBS' },
   { section: 'territories', icon: '◇', title: 'Mapa territorial', description: 'Importe bairros, desenhe microrregiões e atribua agentes.', action: 'Gerenciar territórios' },
-  { section: 'operations', icon: '▦', title: 'Imóveis', description: 'Consulte e administre imóveis e suas visitas em qualquer UBS.', action: 'Abrir imóveis' },
+  { section: 'coverage', icon: '◫', title: 'Cobertura', description: 'Consulte imóveis, visitas, pendências e indicadores de qualquer UBS.', action: 'Abrir cobertura' },
   { section: 'users', icon: '◎', title: 'Usuários', description: 'Crie contas, redefina senhas e transfira servidores.', action: 'Gerenciar usuários' },
   { section: 'roles', icon: '◇', title: 'Funções e permissões', description: 'Crie novas funções e determine cada permissão.', action: 'Configurar acessos' },
   { section: 'backups', icon: '↻', title: 'Backups', description: 'Execute cópias manuais e ajuste a rotina semanal.', action: 'Gerenciar backups' },
@@ -114,7 +113,7 @@ function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
         {section === 'overview' && <Overview overview={overview} onNavigate={navigate} />}
         {section === 'health-units' && <HealthUnitsManager onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'territories' && <Suspense fallback={<div className="admin-error">Carregando o mapa…</div>}><TerritoryWorkspace global session={session} /></Suspense>}
-        {(section === 'operations' || section === 'coverage') && <Suspense fallback={<div className="admin-error">Carregando os cadastros…</div>}><PropertyWorkspace key={section} mode={section === 'coverage' ? 'coverage' : 'properties'} global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
+        {section === 'coverage' && <Suspense fallback={<div className="admin-error">Carregando imóveis e cobertura…</div>}><PropertyWorkspace global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
         {section === 'workflows' && <Suspense fallback={<div className="admin-error">Carregando os fluxos operacionais…</div>}><OperationalWorkspace global session={session} /></Suspense>}
         {section === 'onboarding' && <Suspense fallback={<div className="admin-error">Verificando a pré-implantação…</div>}><OnboardingWorkspace global session={session} /></Suspense>}
         {section === 'pilot-release' && <Suspense fallback={<div className="admin-error">Conferindo a liberação…</div>}><PilotReleaseWorkspace global session={session} /></Suspense>}

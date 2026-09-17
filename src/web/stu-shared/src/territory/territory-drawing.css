@@ -25,11 +25,8 @@
 .territory-list article[role="button"] {
   border-radius: 0.65rem;
   cursor: pointer;
-  margin-inline: -0.45rem;
-  padding-inline: 0.45rem;
-  transition:
-    background-color 160ms ease,
-    box-shadow 160ms ease;
+  margin-inline: 0;
+  padding-inline: 0.8rem;
 }
 
 .territory-list article[role="button"]:hover {
@@ -74,7 +71,15 @@
   gap: 0.32rem;
 }
 
-.territory-kind-label i,
+.territory-kind-label i {
+  border: 1px solid rgba(20, 42, 36, 0.2);
+  border-radius: 0.32rem;
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 1.65rem;
+  width: 1.65rem;
+}
+
 .territory-neighborhood-picker label i {
   border: 1px solid rgba(20, 42, 36, 0.2);
   border-radius: 50%;

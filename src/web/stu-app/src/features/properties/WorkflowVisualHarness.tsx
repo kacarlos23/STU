@@ -24,7 +24,7 @@ globalThis.fetch = async (input, init) => {
   const url = new URL(path, location.origin)
   if (url.pathname === '/api/properties/address-suggestion') return Response.json({ found: true, street: 'Rua fictícia de validação', postalCode: '45990-000' })
   if (path.startsWith('/api/dashboard')) return Response.json({ healthUnitName: session.healthUnit?.name, activeProperties: 4, activeFamilyIdentifiers: 4, visitsThisMonth: 18, visitsPreviousMonth: 15, visitsChangePercent: 20, coverageAlerts: 2, unassignedMicroregions: 0, coverage: { covered: 2, overdue: 1, neverVisited: 1, notConfigured: 0 }, microregions: [{ id: 'micro', code: 'MR01', name: 'Microrregião de demonstração', color: '#2F6BBD', assigned: true, activeProperties: 4, covered: 2, alerts: 2 }], stage: '1 microrregião ativa no mapa' })
-  if (path.startsWith('/api/notifications')) return Response.json({ items: [], unreadCount: 0 })
+  if (path.startsWith('/api/notifications')) return Response.json({ items: [], unreadCount: 3 })
   if (url.pathname === '/api/territories/map') return Response.json({ type: 'FeatureCollection', features: [{ type: 'Feature', id: 'micro', geometry: boundary, properties: { entityType: 'microregion', id: 'micro', code: 'MR01', name: 'Microrregião de demonstração', color: '#2F6BBD', assignedAgentId: 'visual-user', neighborhoodIds: [] } }] })
   if (url.pathname === '/api/territories/microregions/archived') return Response.json({ type: 'FeatureCollection', features: [] })
   if (url.pathname === '/api/properties/map') return Response.json({ type: 'FeatureCollection', features: records.map(item => ({ type: 'Feature', id: item.id, geometry: item.geometry, properties: { entityType: 'property', houseNumber: item.houseNumber, familyNumber: item.familyNumber, coverageStatus: item.coverageStatus } })) })
@@ -47,6 +47,6 @@ createRoot(document.getElementById('root')!).render(visualView === 'comparison'
   ? <InteractionProvider><TerritoryComparison before={boundary} after={after} validated onClose={() => location.assign('/workflow-visual-test.html')} /></InteractionProvider>
   : <Dashboard session={session} logout={async () => {}} />)
 if (visualView === 'map') window.setTimeout(() => {
-  const mapButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Mapa territorial'))
+  const mapButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Território'))
   mapButton?.click()
 }, 250)

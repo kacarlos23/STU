@@ -14,6 +14,8 @@ type IconName =
   | 'warning'
   | 'family'
   | 'arrow'
+  | 'chevron'
+  | 'search'
   | 'more'
 
 const paths: Record<IconName, ReactNode> = {
@@ -32,6 +34,8 @@ const paths: Record<IconName, ReactNode> = {
   warning: <><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></>,
   family: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M3 21v-2a5 5 0 0 1 10 0v2M14 16a4 4 0 0 1 7 3v2"/></>,
   arrow: <><path d="M5 12h14M13 6l6 6-6 6"/></>,
+  chevron: <path d="m7 9 5 5 5-5"/>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
   more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
 }
 

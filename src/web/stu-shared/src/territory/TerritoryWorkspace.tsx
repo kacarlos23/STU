@@ -119,6 +119,7 @@ export function TerritoryWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<TerritorySummary | null>(null);
   const [layerVisibility, setLayerVisibility] = useState({ neighborhoods: true, microregions: true, properties: true });
+  const [panelTab, setPanelTab] = useState<"territory" | "layers" | "coverage">("territory");
   const [editor, setEditor] = useState<EditorKind | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [draftGeometry, setDraftGeometry] = useState<Geometry | null>(null);
@@ -275,6 +276,10 @@ export function TerritoryWorkspace({
         trackUserLocation: false,
       }),
       "top-right",
+    );
+    map.addControl(
+      new maplibregl.ScaleControl({ maxWidth: 150, unit: "metric" }),
+      "bottom-left",
     );
     map.on("load", () => {
       map.addSource("territories", { type: "geojson", data: emptyCollection });
@@ -539,11 +544,7 @@ export function TerritoryWorkspace({
       setGeoJsonSourceData(map, "territories", data);
       setFocusedFeatureId("");
       setFocusedGeometry(null);
-      map.easeTo({
-        center: teixeiraDeFreitasCenter,
-        zoom: 12,
-        duration: 500,
-      });
+      fitTerritoryFeatures(map, data.features);
     };
     map.getSource("territories") ? update() : map.once("load", update);
   }, [data]);
@@ -736,6 +737,14 @@ export function TerritoryWorkspace({
     );
     if (!bounds.isEmpty())
       map.fitBounds(bounds, { padding: 85, maxZoom: 16, duration: 700 });
+  }
+
+  function fitTerritory() {
+    const map = mapRef.current;
+    if (!map) return;
+    setFocusedFeatureId("");
+    setFocusedGeometry(null);
+    fitTerritoryFeatures(map, data.features);
   }
 
   async function mutation(
@@ -1001,51 +1010,11 @@ export function TerritoryWorkspace({
   const visibleMicroregions =
     microregionView === "archived" ? archivedMicroregions : microregions;
   const neighborhoods = reference?.neighborhoods ?? [];
+  const currentUnit = units.find((unit) => unit.id === unitId) ?? session.healthUnit;
+  const editableMicroregion = microregions.find((feature) => feature.id === focusedFeatureId) ?? microregions[0];
   const editableVertexCount = editableVerticesFromGeometry(draftGeometry).length;
   return (
     <section className="territory-workspace">
-      <header className="territory-heading">
-        <div>
-          <span>Território georreferenciado</span>
-          <h2>Mapa de bairros e microrregiões</h2>
-          <p>Os dados exibidos respeitam a UBS e as permissões da conta.</p>
-        </div>
-        <div className="territory-actions">
-          {global && (
-            <label>
-              UBS
-              <select
-                value={unitId}
-                disabled={loading}
-                onChange={(event) => {
-                  const nextUnit = event.target.value;
-                  void guard(() => { closeEditor(); setUnitId(nextUnit); });
-                }}
-              >
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.code} — {unit.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {canManage && (
-            <>
-              <button onClick={() => start("neighborhood")} type="button">
-                ＋ Bairro
-              </button>
-              <button
-                className="territory-primary"
-                onClick={() => start("microregion")}
-                type="button"
-              >
-                ＋ Microrregião
-              </button>
-            </>
-          )}
-        </div>
-      </header>
       {error && !editor && (
         <div className="territory-message territory-error" role="alert">
           {error}
@@ -1056,104 +1025,59 @@ export function TerritoryWorkspace({
           {notice}
         </div>
       )}
-      <div className="territory-view-tools" aria-label="Camadas visíveis" role="group">
-        <strong>Camadas</strong>
-        <label><input checked={layerVisibility.neighborhoods} onChange={(event) => setLayerVisibility(value => ({ ...value, neighborhoods: event.target.checked }))} type="checkbox" /> Bairros</label>
-        <label><input checked={layerVisibility.microregions} onChange={(event) => setLayerVisibility(value => ({ ...value, microregions: event.target.checked }))} type="checkbox" /> Microrregiões</label>
-        <label><input checked={layerVisibility.properties} onChange={(event) => setLayerVisibility(value => ({ ...value, properties: event.target.checked }))} type="checkbox" /> Imóveis e cobertura</label>
-        <span className="territory-layer-help">O limite tracejado identifica microrregiões sem depender apenas da cor.</span>
-      </div>
       <div className="territory-layout">
-        <div
-          aria-label="Mapa territorial interativo. Os bairros e microrregiões também estão disponíveis na lista ao lado."
-          className="territory-map"
-          ref={mapNode}
-          role="region"
-        >
-          <span className="sr-only">
-            Use a lista de bairros e microrregiões para selecionar uma área sem
-            depender do mapa visual.
-          </span>
-          {loading && <i>Atualizando…</i>}
+        <div className="territory-map-stage">
+          <div
+            aria-label="Mapa territorial interativo. Os bairros e microrregiões também estão disponíveis na lista ao lado."
+            className="territory-map"
+            ref={mapNode}
+            role="region"
+          >
+            <span className="sr-only">
+              Use a lista de bairros e microrregiões para selecionar uma área sem
+              depender do mapa visual.
+            </span>
+            {loading && <i>Atualizando…</i>}
+          </div>
+          <section aria-label="Filtro da unidade de saúde" className="territory-map-filter">
+            <span>Território da UBS</span>
+            {global ? <select
+              aria-label="Selecionar UBS do mapa"
+              value={unitId}
+              disabled={loading}
+              onChange={(event) => {
+                const nextUnit = event.target.value;
+                void guard(() => { closeEditor(); setUnitId(nextUnit); });
+              }}
+            >
+              {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}
+            </select> : <strong>{currentUnit?.name ?? "Unidade não selecionada"}</strong>}
+          </section>
+          <button aria-label="Reenquadrar todo o território" className="territory-map-fit" onClick={fitTerritory} title="Reenquadrar território" type="button">
+            <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><circle cx="11" cy="11" r="6" /><path d="m20 20-4.5-4.5M11 8v6M8 11h6" /></svg>
+          </button>
+          <div aria-hidden="true" className="territory-map-north"><b>N</b><span>▲</span></div>
+          <section aria-label="Legenda do mapa" className="territory-map-legend">
+            <strong>Legenda</strong>
+            {visibleMicroregions.slice(0, 5).map((feature) => <span key={feature.id}><i style={{ backgroundColor: String(feature.properties.color ?? "#4f9a7d") }} />{String(feature.properties.code)}</span>)}
+            {layerVisibility.neighborhoods && <span><i className="territory-legend__area" />Bairros</span>}
+            {layerVisibility.microregions && <span><i className="territory-legend__boundary" />Limite da microrregião</span>}
+            {layerVisibility.properties && <span><i className="territory-legend__property" />Imóveis e cobertura</span>}
+          </section>
         </div>
         <aside className="territory-list">
-          <section className="territory-coverage-summary" aria-label="Resumo de cobertura">
-            <div><span>Em dia<strong>{summary?.coverage?.covered ?? 0}</strong></span><span>Alertas<strong>{(summary?.coverage?.overdue ?? 0) + (summary?.coverage?.neverVisited ?? 0)}</strong></span></div>
-            <div className="territory-legend"><span><i className="territory-legend__area" />Área</span><span><i className="territory-legend__boundary" />Microrregião</span><span><i className="territory-legend__property" />Imóvel</span></div>
-          </section>
-          <div>
-            <strong>Bairros</strong>
-            <span>{neighborhoods.length} ativo(s)</span>
+          <div aria-label="Informações do mapa" className="territory-panel-tabs" role="group">
+            <button aria-controls="territory-panel-content" aria-pressed={panelTab === "territory"} onClick={() => setPanelTab("territory")} type="button">Território</button>
+            <button aria-controls="territory-panel-content" aria-pressed={panelTab === "layers"} onClick={() => setPanelTab("layers")} type="button">Camadas</button>
+            <button aria-controls="territory-panel-content" aria-pressed={panelTab === "coverage"} onClick={() => setPanelTab("coverage")} type="button">Cobertura</button>
           </div>
-          {neighborhoods.map((item) => {
-            const feature: Feature = {
-              type: "Feature",
-              id: item.id,
-              geometry: item.geometry,
-              properties: {
-                entityType: "neighborhood",
-                id: item.id,
-                name: item.name,
-                source: item.source,
-                externalReference: item.externalReference,
-                color: item.color,
-                concurrencyToken: item.concurrencyToken,
-              },
-            };
-            return (
-              <article
-                aria-label={`Visualizar bairro ${item.name}`}
-                className={
-                  focusedFeatureId === item.id ? "territory-card-focused" : ""
-                }
-                key={item.id}
-                onClick={() => focusGeometry(item.geometry, item.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    focusGeometry(item.geometry, item.id);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div>
-                  <b className="territory-kind-label">
-                    <i style={{ backgroundColor: item.color }} /> BAIRRO
-                  </b>
-                  <strong>{item.name}</strong>
-                  <small>
-                    {item.geometry.type === "Point"
-                      ? "Referência por ponto"
-                      : "Contorno cadastrado"}{" "}
-                    · clique para visualizar
-                  </small>
-                </div>
-                {canManage && (
-                  <span>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        start("neighborhood", feature);
-                      }}
-                      type="button"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void archive(feature);
-                      }}
-                      type="button"
-                    >
-                      Arquivar
-                    </button>
-                  </span>
-                )}
-              </article>
-            );
-          })}
+          <div className="territory-panel-content" id="territory-panel-content">
+          {panelTab === "territory" && <>
+          <div className="territory-panel-heading">
+            <div><span>Organização territorial</span><h2>Microrregiões</h2></div>
+            {canManage && <button className="territory-primary" onClick={() => start("microregion", editableMicroregion)} type="button">{editableMicroregion ? "Editar limites" : "Nova microrregião"}</button>}
+          </div>
+          {canManage && <div className="territory-panel-actions"><button onClick={() => start("microregion")} type="button">＋ Microrregião</button><button onClick={() => start("neighborhood")} type="button">＋ Bairro</button></div>}
           <div className="territory-microregion-heading">
             <span>
               <strong>Microrregiões</strong>
@@ -1312,6 +1236,63 @@ export function TerritoryWorkspace({
               ))}
             </div>
           )}
+          {neighborhoods.length > 0 && <section className="territory-neighborhood-list">
+            <div className="territory-subheading"><span><strong>Bairros</strong><small>{neighborhoods.length} ativo(s)</small></span>{canManage && <button onClick={() => start("neighborhood")} type="button">Novo bairro</button>}</div>
+            {neighborhoods.map((item) => {
+              const feature: Feature = {
+                type: "Feature",
+                id: item.id,
+                geometry: item.geometry,
+                properties: {
+                  entityType: "neighborhood",
+                  id: item.id,
+                  name: item.name,
+                  source: item.source,
+                  externalReference: item.externalReference,
+                  color: item.color,
+                  concurrencyToken: item.concurrencyToken,
+                },
+              };
+              return <article
+                aria-label={`Visualizar bairro ${item.name}`}
+                className={focusedFeatureId === item.id ? "territory-card-focused" : ""}
+                key={item.id}
+                onClick={() => focusGeometry(item.geometry, item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    focusGeometry(item.geometry, item.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div><b className="territory-kind-label"><i style={{ backgroundColor: item.color }} />BAIRRO</b><strong>{item.name}</strong><small>{item.geometry.type === "Point" ? "Referência por ponto" : "Contorno cadastrado"} · clique para visualizar</small></div>
+                {canManage && <span><button onClick={(event) => { event.stopPropagation(); start("neighborhood", feature); }} type="button">Editar</button><button onClick={(event) => { event.stopPropagation(); void archive(feature); }} type="button">Arquivar</button></span>}
+              </article>;
+            })}
+          </section>}
+          </>}
+          {panelTab === "layers" && <section className="territory-layer-panel">
+            <div className="territory-panel-heading"><div><span>Visualização do mapa</span><h2>Camadas</h2></div></div>
+            <p>Escolha as informações que devem permanecer visíveis no mapa.</p>
+            <label className="territory-layer-toggle"><input checked={layerVisibility.neighborhoods} onChange={(event) => setLayerVisibility(value => ({ ...value, neighborhoods: event.target.checked }))} type="checkbox" /><span><strong>Bairros</strong><small>Limites e referências territoriais dos bairros</small></span></label>
+            <label className="territory-layer-toggle"><input checked={layerVisibility.microregions} onChange={(event) => setLayerVisibility(value => ({ ...value, microregions: event.target.checked }))} type="checkbox" /><span><strong>Microrregiões</strong><small>Áreas de trabalho e identificação por cor e código</small></span></label>
+            <label className="territory-layer-toggle"><input checked={layerVisibility.properties} onChange={(event) => setLayerVisibility(value => ({ ...value, properties: event.target.checked }))} type="checkbox" /><span><strong>Imóveis e cobertura</strong><small>Pontos, lotes e situação das visitas domiciliares</small></span></label>
+            <div className="territory-panel-note"><b>i</b><p>Os limites tracejados continuam identificando as microrregiões mesmo quando as cores forem parecidas.</p></div>
+          </section>}
+          {panelTab === "coverage" && <section className="territory-coverage-panel">
+            <div className="territory-panel-heading"><div><span>Acompanhamento territorial</span><h2>Cobertura</h2></div></div>
+            <section className="territory-coverage-summary" aria-label="Resumo de cobertura"><div><span>Em dia<strong>{summary?.coverage?.covered ?? 0}</strong></span><span>Alertas<strong>{(summary?.coverage?.overdue ?? 0) + (summary?.coverage?.neverVisited ?? 0)}</strong></span></div><div className="territory-legend"><span><i className="territory-legend__area" />Área</span><span><i className="territory-legend__boundary" />Microrregião</span><span><i className="territory-legend__property" />Imóvel</span></div></section>
+            <div className="territory-coverage-list">
+              {(summary?.microregions ?? []).map((item) => {
+                const rate = item.activeProperties === 0 ? 0 : Math.round(item.covered * 100 / item.activeProperties);
+                return <article key={item.id}><div><i style={{ backgroundColor: item.color }} /><span><strong>{item.code}</strong><small>{item.name}</small></span><b>{rate}%</b></div><span><i style={{ width: `${rate}%` }} /></span><small>{item.activeProperties} imóvel(is) · {item.alerts} alerta(s)</small></article>;
+              })}
+            </div>
+            <div className="territory-panel-note"><b>i</b><p>A cobertura combina imóveis em dia, visitas vencidas e endereços ainda sem visita registrada.</p></div>
+          </section>}
+          </div>
         </aside>
       </div>
       {editor && (
@@ -1598,6 +1579,22 @@ function visitCoordinates(
     return;
   }
   for (const child of value) visitCoordinates(child, visitor);
+}
+
+function fitTerritoryFeatures(map: MapLibreMap, features: Feature[]) {
+  const territorialFeatures = features.filter(
+    (feature) => feature.properties.entityType !== "property",
+  );
+  const featuresToFit = territorialFeatures.length > 0 ? territorialFeatures : features;
+  const bounds = new maplibregl.LngLatBounds();
+  for (const feature of featuresToFit) {
+    visitCoordinates(feature.geometry.coordinates, (coordinate) => bounds.extend(coordinate));
+  }
+  if (!bounds.isEmpty()) {
+    map.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 0 });
+    return;
+  }
+  map.easeTo({ center: teixeiraDeFreitasCenter, zoom: 12, duration: 0 });
 }
 
 function translateAction(action: string) {

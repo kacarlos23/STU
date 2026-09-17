@@ -89,6 +89,7 @@ type View = "properties" | "settings";
 type RecordState = "active" | "draft" | "archived" | "all";
 type CoverageSummary = { total: number; overdue: number; neverVisited: number; covered: number; notConfigured: number };
 type Preferences = { unitId: string; view: View; query: string; microregionId: string; coverage: string; recordState: RecordState; page: number; selectedId: string; createHandled: number };
+type PropertySearchRequest = { value: string; nonce: number };
 
 const rasterTilesUrl =
   import.meta.env.VITE_STU_RASTER_TILES_URL ||
@@ -98,25 +99,26 @@ const emptyPoint: [number, number] = [-39.7419, -17.5394];
 export function PropertyWorkspace({
   session,
   global = false,
-  mode = "properties",
   createRequest = 0,
   onOpenTerritory,
+  searchRequest,
 }: {
   session: Session;
   global?: boolean;
-  mode?: "properties" | "coverage";
   createRequest?: number;
   onOpenTerritory?: () => void;
+  searchRequest?: PropertySearchRequest;
 }) {
   const { guard, confirm } = useUiActions();
-  const [preferences, setPreferences] = useSessionPreferences<Preferences>(`properties:${mode}`, {
+  const [preferences, setPreferences] = useSessionPreferences<Preferences>("properties:unified-coverage", {
     unitId: session.healthUnit?.id ?? "", view: "properties", query: "", microregionId: "",
-    coverage: mode === "coverage" ? "pending" : "", recordState: "active", page: 1, selectedId: "", createHandled: 0,
+    coverage: "", recordState: "active", page: 1, selectedId: "", createHandled: 0,
   });
   const [view, setView] = useState<View>(preferences.view);
   const [recordState, setRecordState] = useState<RecordState>(preferences.recordState);
   const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null);
   const [createHandled, setCreateHandled] = useState(preferences.createHandled);
+  const searchHandled = useRef(0);
   const loadSequence = useRef(0);
   const [units, setUnits] = useState<Unit[]>(
     session.healthUnit ? [session.healthUnit] : [],
@@ -155,6 +157,17 @@ export function PropertyWorkspace({
     setPreferences({ unitId, view, query: queryInput, microregionId, coverage, recordState, page, selectedId, createHandled });
   }, [unitId, view, queryInput, microregionId, coverage, recordState, page, selectedId, createHandled, setPreferences]);
 
+  useEffect(() => {
+    if (!searchRequest || searchRequest.nonce === searchHandled.current) return;
+    searchHandled.current = searchRequest.nonce;
+    const nextQuery = searchRequest.value.trim();
+    setQueryInput(nextQuery);
+    setQuery(nextQuery);
+    setSelectedId("");
+    setPage(1);
+    setView("properties");
+  }, [searchRequest]);
+
   const load = useCallback(
     async (selectedUnit: string) => {
       if (!selectedUnit) return;
@@ -164,7 +177,7 @@ export function PropertyWorkspace({
       try {
         const params = new URLSearchParams({
           healthUnitId: selectedUnit,
-          recordState: mode === "coverage" ? "active" : recordState,
+          recordState,
           pageSize: "100",
           page: String(page),
         });
@@ -205,7 +218,7 @@ export function PropertyWorkspace({
         if (sequence === loadSequence.current) setLoading(false);
       }
     },
-    [coverage, microregionId, page, query, mode, recordState],
+    [coverage, microregionId, page, query, recordState],
   );
 
   useEffect(() => {
@@ -316,7 +329,7 @@ export function PropertyWorkspace({
           <h2>
             {view === "settings"
                 ? "Cobertura e rótulos"
-                : mode === "coverage" ? "Pendências de cobertura" : "Cadastro de imóveis"}
+                : "Imóveis e cobertura"}
           </h2>
           <p>
             Somente dados do imóvel e da operação — sem moradores ou informações
@@ -353,7 +366,7 @@ export function PropertyWorkspace({
             onClick={() => { if (view !== "properties") void guard(() => setView("properties")); }}
             type="button"
           >
-            {mode === "coverage" ? "Pendências" : "Imóveis"}
+            Cobertura
           </button>
           {canManageSettings && (
             <button
@@ -365,7 +378,7 @@ export function PropertyWorkspace({
               Configurar
             </button>
           )}
-          {canManageProperties && mode === "properties" && view !== "settings" && (
+          {canManageProperties && view !== "settings" && (
             <button
               className="property-primary"
               disabled={loading || !reference?.microregions.length}
@@ -411,7 +424,7 @@ export function PropertyWorkspace({
         />
       ) : (
         <>
-          {mode === "coverage" && <section className="coverage-summary" aria-label="Resumo da cobertura">
+          <section className="coverage-summary" aria-label="Resumo da cobertura">
             <p>Imóveis ativos da UBS ou das áreas autorizadas. As contagens respeitam a busca e a microrregião, antes do filtro de cobertura.</p>
             <div>{([
               ["pending", "Pendentes", (coverageSummary?.overdue ?? 0) + (coverageSummary?.neverVisited ?? 0)],
@@ -419,7 +432,7 @@ export function PropertyWorkspace({
               ["neverVisited", "Nunca visitados", coverageSummary?.neverVisited],
               ["covered", "Em dia", coverageSummary?.covered],
             ] as const).map(([filter, label, count]) => <button key={filter} type="button" aria-label={`${coverageSummary ? count : "—"} ${label}`} aria-pressed={coverage === filter} onClick={() => { setCoverage(filter); setPage(1); }}><strong>{coverageSummary ? count : "—"}</strong><span>{label}</span></button>)}</div>
-          </section>}
+          </section>
           <section className="property-stats">
             <span>
               <strong>{total}</strong> resultados
@@ -459,7 +472,7 @@ export function PropertyWorkspace({
             </section>
           )}
           <div className="property-filters">
-            {mode === "properties" && <select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select>}
+            <select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select>
             <input
               aria-label="Buscar imóvel"
               onChange={(event) => setQueryInput(event.target.value)}
