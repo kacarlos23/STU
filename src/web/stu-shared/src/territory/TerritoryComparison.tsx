@@ -42,7 +42,7 @@ function ComparisonMap({ label, geometry, bounds, previous = false }: { label: s
     if (!map) return
     const update = () => {
       const data = { type: 'Feature' as const, properties: {}, geometry }
-      const color = previous ? '#315b89' : '#176f5d'
+      const color = previous ? '#A98BFF' : '#6D4AFF'
       const source = map.getSource('comparison') as GeoJSONSource | undefined
       if (source) source.setData(data as never)
       else {
@@ -57,5 +57,5 @@ function ComparisonMap({ label, geometry, bounds, previous = false }: { label: s
     else map.on('load', update)
     return () => { map.off('load', update) }
   }, [geometry, bounds, previous])
-  return <section><h3>{label}</h3><p>{previous ? 'Contorno azul tracejado' : 'Contorno verde contínuo'}</p><div role="region" aria-label={label} className="territory-comparison-map" ref={node} />{error && <p role="alert">Não foi possível abrir esta visualização. Retorne à edição e confira o mapa principal.</p>}</section>
+    return <section><h3>{label}</h3><p>{previous ? 'Contorno lilás tracejado' : 'Contorno violeta contínuo'}</p><div role="region" aria-label={label} className="territory-comparison-map" ref={node} />{error && <p role="alert">Não foi possível abrir esta visualização. Retorne à edição e confira o mapa principal.</p>}</section>
 }

@@ -37,9 +37,10 @@ export function TerritoryOverviewMap({ healthUnitId, onOpenMap }: { healthUnitId
     let cancelled = false
     map.on('load', async () => {
       map.addSource('overview-territory', { type: 'geojson', data: emptyCollection })
-      map.addLayer({ id: 'overview-fill', type: 'fill', source: 'overview-territory', filter: ['==', ['get', 'entityType'], 'microregion'], paint: { 'fill-color': ['coalesce', ['get', 'color'], '#2F6BBD'], 'fill-opacity': .36 } })
-      map.addLayer({ id: 'overview-line', type: 'line', source: 'overview-territory', filter: ['==', ['get', 'entityType'], 'microregion'], paint: { 'line-color': ['coalesce', ['get', 'color'], '#2F6BBD'], 'line-width': 2.4, 'line-dasharray': [3, 1.5] } })
-      map.addLayer({ id: 'overview-properties', type: 'circle', source: 'overview-territory', filter: ['all', ['==', ['get', 'entityType'], 'property'], ['==', ['geometry-type'], 'Point']], paint: { 'circle-color': ['match', ['get', 'coverageStatus'], 'covered', '#176B5A', 'overdue', '#D95D52', 'neverVisited', '#E9A23B', '#7A5AAF'], 'circle-radius': 4, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } })
+      const territorialColor = ['match', ['get', 'color'], '#2e8b72', '#A98BFF', '#4f9a7d', '#6D4AFF', '#2F6BBD', '#6D4AFF', '#7c3aed', '#7C5AC7', '#db2777', '#C05A9D', '#dc2626', '#B96CB0', '#d97706', '#8B6FD6', '#65a30d', '#5C3BB8', '#475569', '#3A245A', ['coalesce', ['get', 'color'], '#6D4AFF']] as maplibregl.ExpressionSpecification
+      map.addLayer({ id: 'overview-fill', type: 'fill', source: 'overview-territory', filter: ['==', ['get', 'entityType'], 'microregion'], paint: { 'fill-color': territorialColor, 'fill-opacity': .36 } })
+      map.addLayer({ id: 'overview-line', type: 'line', source: 'overview-territory', filter: ['==', ['get', 'entityType'], 'microregion'], paint: { 'line-color': territorialColor, 'line-width': 2.4, 'line-dasharray': [3, 1.5] } })
+      map.addLayer({ id: 'overview-properties', type: 'circle', source: 'overview-territory', filter: ['all', ['==', ['get', 'entityType'], 'property'], ['==', ['geometry-type'], 'Point']], paint: { 'circle-color': ['match', ['get', 'coverageStatus'], 'covered', '#267158', 'overdue', '#D95D52', 'neverVisited', '#E9A23B', '#C05A9D'], 'circle-radius': 4, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } })
       try {
         const suffix = `?healthUnitId=${encodeURIComponent(healthUnitId)}`
         const [territoryResponse, propertyResponse] = await Promise.all([

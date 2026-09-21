@@ -166,9 +166,9 @@ describe('Melhorias operacionais', () => {
     expect(screen.getByLabelText('Situação do cadastro')).toHaveValue('active')
     expect(screen.getByRole('button', { name: /Cadastrar imóvel/ })).toBeInTheDocument()
     const summary = screen.getByRole('region', { name: 'Resumo da cobertura' })
-    await waitFor(() => expect(within(summary).getByRole('button', { name: '2 Pendentes' })).toBeInTheDocument())
-    fireEvent.click(within(summary).getByRole('button', { name: '1 Fora do prazo' }))
-    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('coverage=overdue'))).toBe(true))
+    await waitFor(() => expect(within(summary).getByRole('button', { name: '2 Precisam de atenção' })).toBeInTheDocument())
+    fireEvent.click(within(summary).getByRole('button', { name: '2 Precisam de atenção' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('coverage=pending'))).toBe(true))
   })
 
   it('mantém o rascunho da visita após erro e pede confirmação ao navegar', async () => {

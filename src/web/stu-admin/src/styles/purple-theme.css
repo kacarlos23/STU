@@ -1,0 +1,181 @@
+body,
+.admin-workspace {
+  background: #f8f7fb;
+  color: #261f32;
+}
+
+.admin-sidebar {
+  background: #241336;
+  color: #f8f7fb;
+}
+
+.admin-brand > span,
+.admin-account > span {
+  background: #eee9ff;
+  color: #2f1b4d;
+}
+
+.admin-sidebar nav button {
+  color: #d9d2e1;
+}
+
+.admin-sidebar nav button span,
+.admin-account button {
+  color: #b8aec2;
+}
+
+.admin-sidebar nav button:hover {
+  background: rgba(169, 139, 255, .14);
+}
+
+.admin-sidebar nav .admin-nav-active {
+  background: #6d4aff;
+  box-shadow: inset 3px 0 #a98bff;
+  color: #fff;
+}
+
+.admin-sidebar nav .admin-nav-active span {
+  color: #eee9ff;
+}
+
+.admin-sidebar nav button small {
+  background: #4f2c73;
+}
+
+.admin-account small {
+  color: #b8aec2;
+}
+
+.admin-header > div > span,
+.admin-section-heading > div > span,
+.management-heading > div > span,
+.backup-history > header span,
+.monitoring-alerts > header span,
+.permission-group > strong {
+  color: #6d4aff;
+}
+
+.admin-header h1,
+.admin-section-heading h2,
+.management-heading h2,
+.admin-metric strong,
+.management-table td > strong,
+.role-card h3,
+.audit-meta strong,
+.backup-settings__intro strong,
+.backup-history h3,
+.monitoring-checks h3,
+.monitoring-alerts h3,
+.monitoring-empty strong {
+  color: #261f32;
+}
+
+.admin-header p,
+.admin-section-heading p,
+.management-heading p,
+.admin-metric small,
+.admin-metric p,
+.admin-area-grid p,
+.management-table td,
+.management-table td > small,
+.role-card p,
+.role-card > small,
+.audit-list p,
+.empty-state,
+.monitoring-note {
+  color: #746b7e;
+}
+
+.admin-metric,
+.admin-area-grid article,
+.management-table-wrap,
+.role-card,
+.audit-list,
+.backup-settings,
+.monitoring-checks article,
+.monitoring-empty {
+  border-color: #ddd8e5;
+}
+
+.admin-security {
+  background: #f2eeff;
+  border-color: #ddd8e5;
+  color: #4f2c73;
+}
+
+.area-icon,
+.role-kind,
+.form-note,
+.management-table th,
+.management-search button,
+.backup-history > header button,
+.monitoring-alerts > header > strong {
+  background: #eee9ff;
+  color: #4f2c73;
+}
+
+.admin-area-grid button,
+.management-search button,
+.backup-history > header button,
+.row-actions button,
+.row-actions a {
+  color: #6d4aff;
+}
+
+.management-primary {
+  background: #6d4aff !important;
+  border-color: #6d4aff !important;
+  color: #fff !important;
+}
+
+.management-search input,
+.management-heading select,
+.management-form input,
+.management-form select,
+.management-form textarea,
+.backup-settings input,
+.backup-settings select,
+.permission-fieldset,
+.row-actions button,
+.row-actions a {
+  border-color: #ddd8e5;
+}
+
+.management-form input:focus,
+.management-form select:focus,
+.management-form textarea:focus,
+.management-search input:focus,
+.management-heading select:focus,
+.backup-settings input:focus,
+.backup-settings select:focus {
+  border-color: #6d4aff;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, .16);
+}
+
+.modal-backdrop {
+  background: rgba(36, 19, 54, .58);
+}
+
+.management-modal {
+  box-shadow: 0 2rem 6rem rgba(47, 27, 77, .24);
+}
+
+.audit-dot {
+  background: #c05a9d;
+  border-color: #f4eaf1;
+}
+
+.audit-meta code,
+.management-table code {
+  background: #f2eeff;
+  color: #4f2c73;
+}
+
+.skip-link {
+  border-color: #6d4aff;
+  color: #4f2c73;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, .28) !important;
+}

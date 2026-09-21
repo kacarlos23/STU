@@ -1,0 +1,37 @@
+.territory-editor-progress {
+  background: #F8F7FB;
+  border: 1px solid #DDD8E5;
+  border-radius: .7rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: hidden;
+}
+
+.territory-editor-progress > div { align-items: center; display: grid; gap: .35rem; grid-template-columns: 1.5rem 1fr; min-width: 0; padding: .55rem .45rem; }
+.territory-editor-progress > div + div { border-left: 1px solid #DDD8E5; }
+.territory-editor-progress i { align-items: center; background: #E9E5ED; border-radius: 50%; color: #746B7E; display: flex; font-size: .54rem; font-style: normal; font-weight: 850; height: 1.4rem; justify-content: center; width: 1.4rem; }
+.territory-editor-progress span { display: grid; min-width: 0; }
+.territory-editor-progress strong { font-size: .54rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.territory-editor-progress small { color: #746B7E; font-size: .47rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.territory-editor-progress .active { background: #F2EEFF; }
+.territory-editor-progress .active i { background: #6D4AFF; color: #fff; }
+.territory-editor-progress .complete i { background: #d8eee6; color: #6D4AFF; }
+
+.territory-draft-status { background: #F4F1FF; border-radius: .55rem; color: #5F556A; font-size: .56rem; margin: -.15rem 0 0; padding: .55rem .65rem; }
+
+.territory-impact header { align-items: start; display: flex; gap: .7rem; justify-content: space-between; }
+.territory-impact header span { color: #746B7E; font-size: .5rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.territory-impact header h4 { font-size: .7rem; margin: .15rem 0; }
+.territory-impact header p { color: #746B7E; font-size: .52rem; margin: 0; }
+.territory-impact header > strong { background: #dff2e9; border-radius: 999px; color: #267158; font-size: .5rem; padding: .3rem .45rem; }
+.territory-impact:has(.territory-error) header > strong { background: #fff0da; color: #9a6222; }
+.territory-impact-counts { display: grid; gap: .45rem; grid-template-columns: 1fr 1fr; margin: .6rem 0; }
+.territory-impact-counts span { background: #fff; border: 1px solid #DDD8E5; border-radius: .5rem; display: grid; gap: .12rem; padding: .5rem; }
+.territory-impact-counts small { color: #746B7E; font-size: .5rem; }
+.territory-impact-counts b { font-size: .78rem; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 520px) {
+  .territory-editor-progress { grid-template-columns: 1fr 1fr; }
+  .territory-editor-progress > div:nth-child(3) { border-left: 0; border-top: 1px solid #DDD8E5; }
+  .territory-editor-progress > div:nth-child(4) { border-top: 1px solid #DDD8E5; }
+}

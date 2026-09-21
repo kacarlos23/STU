@@ -1,0 +1,42 @@
+.operations-metrics article p { color: #746B7E; font-size: .7rem; line-height: 1.4; margin: .25rem 0 0; }
+
+.operations-flow {
+  background: #fff;
+  border: 1px solid #E4DFE9;
+  border-radius: 14px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: hidden;
+}
+
+.operations-flow > div { align-items: center; display: grid; gap: .65rem; grid-template-columns: 2rem 1fr; min-height: 4.6rem; padding: .8rem 1rem; position: relative; }
+.operations-flow > div + div { border-left: 1px solid #E9E5ED; }
+.operations-flow > div + div::before { color: #8F8699; content: '›'; font-size: 1.1rem; left: -.25rem; position: absolute; }
+.operations-flow i { align-items: center; background: #F0ECF7; border-radius: 50%; color: #746B7E; display: flex; font-size: .7rem; font-style: normal; font-weight: 850; height: 2rem; justify-content: center; width: 2rem; }
+.operations-flow span { display: grid; gap: .1rem; }
+.operations-flow strong { font-size: .72rem; }
+.operations-flow small { color: #746B7E; font-size: .61rem; }
+.operations-flow .active { background: #F2EEFF; }
+.operations-flow .active i { background: #6D4AFF; color: #fff; }
+.operations-flow .complete i { background: #EEE9FF; color: #6D4AFF; }
+
+.operations-preview { background: #fff; border: 1px solid #DDD8E5; border-left: 5px solid #b58a28; border-radius: 16px; display: grid; gap: 1rem; padding: 1.1rem 1.25rem; }
+.operations-preview header { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
+.operations-preview h3 { font-size: 1.05rem; margin: .25rem 0; }
+.operations-preview header p { color: #64748b; font-size: .75rem; margin: 0; }
+.operations-preview > div { display: grid; gap: .7rem; grid-template-columns: repeat(3, 1fr); }
+.operations-preview article { background: #F8F7FB; border-radius: .7rem; padding: .8rem; }
+.operations-preview article small,
+.operations-preview article strong { display: block; }
+.operations-preview article small { color: #746B7E; font-size: .65rem; }
+.operations-preview article strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; margin-top: .2rem; }
+.operations-preview > button { justify-self: end; }
+
+@media (max-width: 760px) {
+  .operations-flow { grid-template-columns: 1fr 1fr; }
+  .operations-flow > div:nth-child(3) { border-left: 0; border-top: 1px solid #E9E5ED; }
+  .operations-flow > div:nth-child(4) { border-top: 1px solid #E9E5ED; }
+  .operations-preview > div { grid-template-columns: 1fr; }
+  .operations-preview > button { justify-self: stretch; }
+}

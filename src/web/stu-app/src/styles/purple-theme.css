@@ -1,0 +1,260 @@
+:root {
+  accent-color: var(--color-violet);
+}
+
+body,
+.workspace {
+  background: var(--surface-page);
+  color: var(--text-strong);
+}
+
+.sidebar {
+  background: var(--color-plum);
+  color: #f8f7fb;
+}
+
+.brand-copy,
+.nav-item,
+.nav-item > span {
+  color: #e7e0f0;
+}
+
+.nav-item:hover {
+  background: rgba(169, 139, 255, .16);
+}
+
+.nav-item--active {
+  background: var(--color-violet);
+  color: #fff;
+}
+
+.nav-item--active::before {
+  background: var(--color-lilac);
+}
+
+.sidebar-topography g {
+  stroke: var(--color-lilac);
+}
+
+.sidebar-signature {
+  color: #cfc2df;
+}
+
+.sidebar-signature i {
+  background: var(--color-lilac);
+}
+
+.avatar,
+.site-profile .avatar {
+  background: var(--color-lavender);
+  color: var(--color-plum);
+}
+
+.site-header,
+.site-profile-menu,
+.notification-panel {
+  border-color: var(--border-subtle);
+}
+
+.unit-context strong,
+.site-profile-copy strong,
+.module-page-context h1,
+.dashboard-header h1,
+.card-heading h2,
+.quick-card h2 {
+  color: var(--text-strong);
+}
+
+.unit-context .stu-icon,
+.module-page-context > span,
+.breadcrumb,
+.section-kicker,
+.card-heading button {
+  color: var(--color-violet);
+}
+
+.unit-context small,
+.site-profile-copy small,
+.module-page-context p,
+.dashboard-header p {
+  color: var(--text-muted);
+}
+
+.site-search,
+.workspace-skeleton,
+.card-empty,
+.stage-note {
+  background: #f8f7fb;
+  border-color: var(--border-subtle);
+}
+
+.site-search input,
+.site-profile-menu button,
+.quick-actions > button {
+  color: #3d3447;
+}
+
+.site-profile-menu button:hover,
+.quick-actions > button:hover,
+.mobile-more-menu button:hover {
+  background: var(--color-lavender);
+}
+
+.primary-action,
+.operations-primary,
+.territory-primary,
+.property-primary,
+.drawing-primary,
+.pilot-primary,
+.onboarding-primary,
+.unit-users-heading > button,
+.unit-users-dialog .primary,
+.job-actions button,
+.job-actions a {
+  background: var(--color-violet) !important;
+  border-color: var(--color-violet) !important;
+  color: #fff !important;
+}
+
+.metric-icon,
+.quick-icon--green,
+.quick-icon--blue,
+.unit-users-metric-icon,
+.operations-flow .active,
+.territory-editor-progress .active,
+.pilot-progress .active,
+.onboarding-progress .active {
+  background: var(--color-lavender);
+  color: var(--color-violet);
+}
+
+.metric--blue .metric-icon {
+  background: #f2eeff;
+  color: var(--color-violet);
+}
+
+.metric--violet .metric-icon {
+  background: #f7ecf4;
+  color: var(--color-orchid);
+}
+
+.metric--action:hover,
+.coverage-summary-card:hover {
+  border-color: var(--color-lilac);
+  box-shadow: 0 8px 20px rgba(47, 27, 77, .08);
+}
+
+.territory-card,
+.coverage-card,
+.quick-card,
+.metric,
+.property-panel,
+.property-list,
+.operations-card,
+.operations-history,
+.unit-users-metric,
+.unit-users-filter-panel,
+.unit-users-table-wrap {
+  border-color: var(--border-subtle);
+}
+
+.overview-map-shell {
+  background: var(--color-lavender);
+}
+
+.overview-map-open,
+.territory-panel-heading button,
+.territory-subheading button,
+.unit-users-filter-heading > button,
+.unit-users-empty > button {
+  border-color: var(--border-subtle);
+  color: var(--color-violet);
+}
+
+.coverage-bar,
+.property-progress,
+.territory-progress {
+  background: #ece8f1;
+}
+
+.coverage-bar__covered,
+.legend-dot--covered,
+.coverage-key--green {
+  background: var(--color-violet);
+}
+
+.coverage-bar__neutral,
+.coverage-key--violet {
+  background: var(--color-orchid);
+}
+
+.territory-panel-tabs button[aria-pressed="true"] {
+  border-bottom-color: var(--color-violet);
+  color: var(--color-violet);
+}
+
+.territory-layer-toggle input,
+.property-filter-panel input,
+.property-filter-panel select {
+  accent-color: var(--color-violet);
+}
+
+.territory-panel-note,
+.property-last-visit,
+.operations-flow .active,
+.onboarding-next-action,
+.pilot-next-action,
+.unit-users-message:not(.unit-users-error) {
+  background: #f2eeff;
+  border-color: #d9ccff;
+}
+
+.territory-panel-note > b,
+.operations-flow .active i,
+.territory-editor-progress .active i,
+.onboarding-progress .active i,
+.pilot-progress .active i {
+  background: var(--color-violet);
+  color: #fff;
+}
+
+.territory-legend__area {
+  background: var(--color-lilac);
+}
+
+.territory-legend__boundary {
+  border-color: var(--color-violet) !important;
+}
+
+.territory-editor-backdrop,
+.property-modal-backdrop {
+  background: rgba(36, 19, 54, .58);
+}
+
+:where(input, select, textarea):focus,
+:where(input, select, textarea):focus-visible {
+  border-color: var(--color-violet) !important;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, .16) !important;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, .28) !important;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    background: #fff;
+    color: #3d3447;
+  }
+
+  .nav-item,
+  .nav-item > span {
+    color: #746b7e;
+  }
+
+  .nav-item--active,
+  .nav-item--active > span {
+    background: var(--color-lavender);
+    color: var(--color-violet);
+  }
+}

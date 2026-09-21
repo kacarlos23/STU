@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./territory.css";
 import "./territory-drawing.css";
 import "./territory-archive.css";
+import "./territory-ux.css";
 import type { Session } from "../auth/types";
 import { useAccessibleDialog } from "../accessibility/useAccessibleDialog";
 import { useUiActions, useUnsavedChanges } from "../interaction/InteractionProvider";
@@ -126,7 +127,7 @@ export function TerritoryWorkspace({
   const [editing, setEditing] = useState<Feature | null>(null);
   const [territorySource, setTerritorySource] = useState("Manual");
   const [externalReference, setExternalReference] = useState("");
-  const [territoryColor, setTerritoryColor] = useState("#2e8b72");
+  const [territoryColor, setTerritoryColor] = useState("#A98BFF");
   const [osmCandidates, setOsmCandidates] = useState<OsmAreaCandidate[]>([]);
   const [selectedOsmId, setSelectedOsmId] = useState("");
   const [focusedFeatureId, setFocusedFeatureId] = useState("");
@@ -146,7 +147,7 @@ export function TerritoryWorkspace({
     JSON.stringify(draftGeometry) !== JSON.stringify(editing?.geometry ?? null) ||
     territorySource !== String(editing?.properties.source ?? "Manual") ||
     externalReference !== String(editing?.properties.externalReference ?? "") ||
-    territoryColor !== String(editing?.properties.color ?? (editor === "neighborhood" ? "#2e8b72" : "#4f9a7d"))));
+    territoryColor !== String(editing?.properties.color ?? (editor === "neighborhood" ? "#A98BFF" : "#6D4AFF"))));
   const editorDialogRef = useAccessibleDialog<HTMLFormElement>(
     Boolean(editor),
     cancel,
@@ -294,7 +295,7 @@ export function TerritoryWorkspace({
           ["!=", ["geometry-type"], "Point"],
         ],
         paint: {
-          "fill-color": territoryColorExpression("#2e8b72"),
+          "fill-color": territoryColorExpression("#A98BFF"),
           "fill-opacity": 0.24,
         },
       });
@@ -308,7 +309,7 @@ export function TerritoryWorkspace({
           ["!=", ["geometry-type"], "Point"],
         ],
         paint: {
-          "line-color": territoryColorExpression("#17614f"),
+          "line-color": territoryColorExpression("#4F2C73"),
           "line-width": 3,
           "line-opacity": 0.95,
         },
@@ -323,7 +324,7 @@ export function TerritoryWorkspace({
           ["==", ["geometry-type"], "Point"],
         ],
         paint: {
-          "circle-color": territoryColorExpression("#356d5d"),
+          "circle-color": territoryColorExpression("#6D4AFF"),
           "circle-radius": 7,
           "circle-stroke-color": "#fff",
           "circle-stroke-width": 2,
@@ -335,7 +336,7 @@ export function TerritoryWorkspace({
         source: "territories",
         filter: ["==", ["get", "entityType"], "microregion"],
         paint: {
-          "fill-color": territoryColorExpression("#4f9a7d"),
+          "fill-color": territoryColorExpression("#6D4AFF"),
           "fill-opacity": 0.36,
         },
       });
@@ -345,7 +346,7 @@ export function TerritoryWorkspace({
         source: "territories",
         filter: ["==", ["get", "entityType"], "microregion"],
         paint: {
-          "line-color": territoryColorExpression("#244f45"),
+          "line-color": territoryColorExpression("#4F2C73"),
           "line-width": 2,
           "line-dasharray": [4, 2],
         },
@@ -690,7 +691,7 @@ export function TerritoryWorkspace({
     setTerritoryColor(
       String(
         feature?.properties.color ??
-          (kind === "neighborhood" ? "#2e8b72" : "#4f9a7d"),
+          (kind === "neighborhood" ? "#A98BFF" : "#6D4AFF"),
       ),
     );
     setOsmCandidates([]);
@@ -873,7 +874,8 @@ export function TerritoryWorkspace({
   }
 
   async function archive(feature: Feature) {
-    if (!await confirm({ title: "Arquivar área?", message: `${String(feature.properties.name)}. O histórico será preservado e a área poderá ser consultada posteriormente.`, confirmLabel: "Arquivar" }))
+    const kind = feature.properties.entityType === "neighborhood" ? "bairro" : "microrregião";
+    if (!await confirm({ title: `Arquivar ${kind}?`, message: `${String(feature.properties.name)} deixará a visualização e as seleções ativas. Vínculos dependentes podem impedir a operação; nada será apagado e o histórico continuará disponível para consulta.`, confirmLabel: `Arquivar ${kind}` }))
       return;
     try {
       setLoading(true);
@@ -1059,7 +1061,7 @@ export function TerritoryWorkspace({
           <div aria-hidden="true" className="territory-map-north"><b>N</b><span>▲</span></div>
           <section aria-label="Legenda do mapa" className="territory-map-legend">
             <strong>Legenda</strong>
-            {visibleMicroregions.slice(0, 5).map((feature) => <span key={feature.id}><i style={{ backgroundColor: String(feature.properties.color ?? "#4f9a7d") }} />{String(feature.properties.code)}</span>)}
+            {visibleMicroregions.slice(0, 5).map((feature) => <span key={feature.id}><i style={{ backgroundColor: purpleTerritoryColor(feature.properties.color, "#6D4AFF") }} />{String(feature.properties.code)}</span>)}
             {layerVisibility.neighborhoods && <span><i className="territory-legend__area" />Bairros</span>}
             {layerVisibility.microregions && <span><i className="territory-legend__boundary" />Limite da microrregião</span>}
             {layerVisibility.properties && <span><i className="territory-legend__property" />Imóveis e cobertura</span>}
@@ -1144,7 +1146,7 @@ export function TerritoryWorkspace({
                   <i
                     style={{
                       backgroundColor: String(
-                        feature.properties.color ?? "#4f9a7d",
+                        purpleTerritoryColor(feature.properties.color, "#6D4AFF"),
                       ),
                     }}
                   />{" "}
@@ -1334,6 +1336,13 @@ export function TerritoryWorkspace({
                 ×
               </button>
             </header>
+            <section className="territory-editor-progress" aria-label="Etapas da edição territorial">
+              <div className={hasDraftGeometry ? "complete" : "active"}><i>1</i><span><strong>Identificação</strong><small>Nome e origem</small></span></div>
+              <div className={draftGeometry ? "complete" : draftPoints.length ? "active" : ""}><i>2</i><span><strong>Geometria</strong><small>{draftGeometry ? "Contorno pronto" : "Desenhar ou importar"}</small></span></div>
+              {editor === "microregion" && <div className={previewed ? "complete" : draftGeometry ? "active" : ""}><i>3</i><span><strong>Impacto</strong><small>{previewed ? "Validado" : "Conferir vínculos"}</small></span></div>}
+              <div className={(editor === "neighborhood" && draftGeometry) || previewed ? "active" : ""}><i>{editor === "microregion" ? 4 : 3}</i><span><strong>Salvar</strong><small>Versionar mudança</small></span></div>
+            </section>
+            {formDirty && <p className="territory-draft-status" role="status">Rascunho mantido nesta edição · nada foi enviado até você salvar.</p>}
             {editor === "microregion" &&
               editing?.properties.archivedAtUtc && (
                 <p className="territory-archived-warning" role="status">
@@ -1555,7 +1564,7 @@ export function TerritoryWorkspace({
                 disabled={loading || (editor === "microregion" && !previewed)}
                 type="submit"
               >
-                {loading ? "Salvando…" : "Salvar"}
+                {loading ? "Salvando…" : editor === "microregion" && impact ? `Salvar após revisar ${impact.affectedPropertyCount} imóvel(is)` : "Salvar e versionar"}
               </button>
             </footer>
           </form>
@@ -1623,10 +1632,36 @@ function coverageColor() {
 
 function territoryColorExpression(fallback: string) {
   return [
-    "coalesce",
+    "match",
     ["get", "color"],
-    fallback,
+    "#2e8b72", "#A98BFF",
+    "#4f9a7d", "#6D4AFF",
+    "#2F6BBD", "#6D4AFF",
+    "#2f6bbd", "#6D4AFF",
+    "#7c3aed", "#7C5AC7",
+    "#db2777", "#C05A9D",
+    "#dc2626", "#B96CB0",
+    "#d97706", "#8B6FD6",
+    "#65a30d", "#5C3BB8",
+    "#475569", "#3A245A",
+    ["coalesce", ["get", "color"], fallback],
   ] as maplibregl.ExpressionSpecification;
+}
+
+function purpleTerritoryColor(value: unknown, fallback: string) {
+  const color = String(value ?? "");
+  if (color.toLowerCase() === "#2e8b72") return "#A98BFF";
+  if (["#4f9a7d", "#2f6bbd"].includes(color.toLowerCase())) return "#6D4AFF";
+  const legacyPalette: Record<string, string> = {
+    "#7c3aed": "#7C5AC7",
+    "#db2777": "#C05A9D",
+    "#dc2626": "#B96CB0",
+    "#d97706": "#8B6FD6",
+    "#65a30d": "#5C3BB8",
+    "#475569": "#3A245A",
+  };
+  if (legacyPalette[color.toLowerCase()]) return legacyPalette[color.toLowerCase()];
+  return color || fallback;
 }
 
 export function polygonFromPoints(points: [number, number][]): Geometry {

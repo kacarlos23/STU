@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -49,13 +49,22 @@ describe('Acesso ao STU', () => {
     fireEvent.click(profileMenu)
     expect(screen.queryByRole('menuitem', { name: 'Sair do STU' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Servidores' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipe da UBS' })).toHaveFocus()
+    expect(screen.queryByRole('form', { name: 'Busca geral' })).not.toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: 'Servidores cadastrados' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Situação')).toHaveValue('all')
+    expect(screen.getByLabelText('Função')).toHaveValue('all')
     expect(await screen.findAllByText('Gerente da UBS')).not.toHaveLength(0)
-    expect(await screen.findByText('Gerência protegida')).toBeInTheDocument()
+    expect(await screen.findByText('Conta protegida')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Buscar servidor'), { target: { value: 'conta inexistente' } })
+    expect(screen.getByText('Nenhum servidor encontrado')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('region', { name: 'Buscar e filtrar equipe' })).getByRole('button', { name: 'Limpar filtros' }))
+    expect(screen.getByText('Conta protegida')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Adicionar servidor/ }))
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByLabelText('Usuário de acesso')).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Agente de saúde' })).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Usuário de acesso')).toBeInTheDocument()
+    expect(within(dialog).getByRole('option', { name: 'Agente de saúde' })).toBeInTheDocument()
   })
 
   it('unifica imóveis e cobertura mantendo cadastro, histórico e visitas', async () => {
@@ -80,7 +89,8 @@ describe('Acesso ao STU', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar imóvel, família ou endereço' }), { target: { value: 'Rua de teste' } })
     fireEvent.submit(screen.getByRole('form', { name: 'Busca geral' }))
     expect(await screen.findByText(/Acesso liberado/)).toBeInTheDocument()
-    expect(screen.getAllByDisplayValue('Rua de teste')).toHaveLength(2)
+    expect(screen.getByDisplayValue('Rua de teste')).toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Busca geral' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: 'Cobertura' })).toHaveFocus()
     expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
     expect(within(nav).getByRole('button', { name: 'Cobertura' })).toHaveAttribute('aria-current', 'page')
@@ -129,6 +139,26 @@ describe('Acesso ao STU', () => {
     expect(screen.getByText(/Você está sem conexão/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
     expect(screen.getByText('10 identificações familiares')).toBeInTheDocument()
+  })
+
+  it('abre a cobertura já filtrada ao selecionar um indicador contextual', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input)
+      const url = new URL(path, 'https://test.local')
+      if (path === '/api/auth/me') return Promise.resolve(jsonResponse(managerSession()))
+      if (path === '/api/dashboard/summary') return Promise.resolve(jsonResponse({ healthUnitName: 'UBS Piloto', activeProperties: 4, activeFamilyIdentifiers: 4, visitsThisMonth: 6, visitsPreviousMonth: 4, visitsChangePercent: 50, coverageAlerts: 2, unassignedMicroregions: 1, coverage: { covered: 2, overdue: 1, neverVisited: 1, notConfigured: 0 }, microregions: [{ id: 'm1' }, { id: 'm2' }], stage: 'Operação ativa' }))
+      if (url.pathname === '/api/properties') return Promise.resolve(jsonResponse({ items: [], total: 0, coverageSummary: { total: 4, covered: 2, overdue: 1, neverVisited: 1, notConfigured: 0 } }))
+      if (url.pathname === '/api/properties/reference-data') return Promise.resolve(jsonResponse({ selectedHealthUnitId: 'unit-id', microregions: [{ id: 'm1', code: 'MR01', name: 'Área um', boundary: null }], tags: [], coverageRules: [] }))
+      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: /Alertas de cobertura: 2/ }))
+    await screen.findByRole('heading', { name: 'Imóveis e cobertura' })
+    expect(screen.getByLabelText('Filtrar cobertura')).toHaveValue('pending')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('coverage=pending'))).toBe(true))
   })
 })
 

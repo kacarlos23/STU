@@ -14,6 +14,7 @@ import "./property-editor.css";
 import "./property-prerequisite.css";
 import "./pagination.css";
 import "./workflow.css";
+import "./properties-refinement.css";
 import { useAddressSuggestion } from './useAddressSuggestion';
 import './address-suggestion.css';
 import { useUiActions, useUnsavedChanges, useSessionPreferences } from "../interaction/InteractionProvider";
@@ -90,6 +91,7 @@ type RecordState = "active" | "draft" | "archived" | "all";
 type CoverageSummary = { total: number; overdue: number; neverVisited: number; covered: number; notConfigured: number };
 type Preferences = { unitId: string; view: View; query: string; microregionId: string; coverage: string; recordState: RecordState; page: number; selectedId: string; createHandled: number };
 type PropertySearchRequest = { value: string; nonce: number };
+type PropertyCoverageRequest = { value: string; nonce: number };
 
 const rasterTilesUrl =
   import.meta.env.VITE_STU_RASTER_TILES_URL ||
@@ -100,12 +102,14 @@ export function PropertyWorkspace({
   session,
   global = false,
   createRequest = 0,
+  coverageRequest,
   onOpenTerritory,
   searchRequest,
 }: {
   session: Session;
   global?: boolean;
   createRequest?: number;
+  coverageRequest?: PropertyCoverageRequest;
   onOpenTerritory?: () => void;
   searchRequest?: PropertySearchRequest;
 }) {
@@ -119,6 +123,7 @@ export function PropertyWorkspace({
   const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null);
   const [createHandled, setCreateHandled] = useState(preferences.createHandled);
   const searchHandled = useRef(0);
+  const coverageHandled = useRef(0);
   const loadSequence = useRef(0);
   const [units, setUnits] = useState<Unit[]>(
     session.healthUnit ? [session.healthUnit] : [],
@@ -167,6 +172,16 @@ export function PropertyWorkspace({
     setPage(1);
     setView("properties");
   }, [searchRequest]);
+
+  useEffect(() => {
+    if (!coverageRequest || coverageRequest.nonce === coverageHandled.current) return;
+    coverageHandled.current = coverageRequest.nonce;
+    setCoverage(coverageRequest.value);
+    setRecordState("active");
+    setSelectedId("");
+    setPage(1);
+    setView("properties");
+  }, [coverageRequest]);
 
   const load = useCallback(
     async (selectedUnit: string) => {
@@ -280,10 +295,25 @@ export function PropertyWorkspace({
 
   const filtered = properties;
   const selected = properties.find((item) => item.id === selectedId) ?? null;
+  const hasActiveFilters = recordState !== "active" || Boolean(queryInput.trim()) || Boolean(microregionId) || Boolean(coverage);
+
+  function clearFilters() {
+    setRecordState("active");
+    setQueryInput("");
+    setQuery("");
+    setMicroregionId("");
+    setCoverage("");
+    setSelectedId("");
+    setPage(1);
+  }
 
   async function archiveProperty(item: PropertyItem) {
     const action = item.archivedAtUtc ? "reativar" : "arquivar";
-    if (!await confirm({ title: `${item.archivedAtUtc ? "Reativar" : "Arquivar"} imóvel?`, message: `Imóvel ${item.houseNumber}, família ${item.familyNumber}. O histórico será preservado.`, confirmLabel: item.archivedAtUtc ? "Reativar" : "Arquivar" }))
+    const visitImpact = item.id === selectedId ? `${visits.length} visita${visits.length === 1 ? "" : "s"} e todo o histórico serão preservados.` : "As visitas e todo o histórico serão preservados.";
+    const consequence = item.archivedAtUtc
+      ? "O imóvel voltará às listas ativas e poderá gerar alertas de cobertura."
+      : "O imóvel sairá das listas ativas e deixará de gerar alertas de cobertura.";
+    if (!await confirm({ title: `${item.archivedAtUtc ? "Reativar" : "Arquivar"} imóvel?`, message: `Imóvel ${item.houseNumber}, família ${item.familyNumber}. ${consequence} ${visitImpact}`, confirmLabel: item.archivedAtUtc ? "Reativar" : "Arquivar" }))
       return;
     try {
       setLoading(true);
@@ -325,7 +355,6 @@ export function PropertyWorkspace({
     <section className="property-workspace">
       <header className="property-heading">
         <div>
-          <span>Operação territorial</span>
           <h2>
             {view === "settings"
                 ? "Cobertura e rótulos"
@@ -425,45 +454,12 @@ export function PropertyWorkspace({
       ) : (
         <>
           <section className="coverage-summary" aria-label="Resumo da cobertura">
-            <p>Imóveis ativos da UBS ou das áreas autorizadas. As contagens respeitam a busca e a microrregião, antes do filtro de cobertura.</p>
             <div>{([
-              ["pending", "Pendentes", (coverageSummary?.overdue ?? 0) + (coverageSummary?.neverVisited ?? 0)],
-              ["overdue", "Fora do prazo", coverageSummary?.overdue],
-              ["neverVisited", "Nunca visitados", coverageSummary?.neverVisited],
-              ["covered", "Em dia", coverageSummary?.covered],
-            ] as const).map(([filter, label, count]) => <button key={filter} type="button" aria-label={`${coverageSummary ? count : "—"} ${label}`} aria-pressed={coverage === filter} onClick={() => { setCoverage(filter); setPage(1); }}><strong>{coverageSummary ? count : "—"}</strong><span>{label}</span></button>)}</div>
-          </section>
-          <section className="property-stats">
-            <span>
-              <strong>{total}</strong> resultados
-            </span>
-            <span>
-              <strong>
-                {
-                  properties.filter((item) => item.coverageStatus === "overdue")
-                    .length
-                }
-              </strong>{" "}
-              fora do prazo nesta página
-            </span>
-            <span>
-              <strong>
-                {
-                  properties.filter(
-                    (item) =>
-                      item.registrationStatus === "Draft" &&
-                      !item.archivedAtUtc,
-                  ).length
-                }
-              </strong>{" "}
-              rascunhos nesta página
-            </span>
-            <span>
-              <strong>
-                {visits.filter((item) => !item.archivedAtUtc).length}
-              </strong>{" "}
-              visitas na ficha atual
-            </span>
+              ["", "Total de imóveis", coverageSummary?.total ?? total, `${pluralize(coverageSummary?.total ?? total, "imóvel ativo", "imóveis ativos")} na UBS`, "total", "building"],
+              ["pending", "Precisam de atenção", (coverageSummary?.overdue ?? 0) + (coverageSummary?.neverVisited ?? 0), `${coveragePercent((coverageSummary?.overdue ?? 0) + (coverageSummary?.neverVisited ?? 0), coverageSummary?.total ?? 0)}% · sem visita ou fora do prazo`, "attention", "warning"],
+              ["neverVisited", "Nunca visitados", coverageSummary?.neverVisited, `${coveragePercent(coverageSummary?.neverVisited ?? 0, coverageSummary?.total ?? 0)}% · ainda sem primeira visita`, "never", "calendar"],
+              ["covered", "Em dia", coverageSummary?.covered, `${coveragePercent(coverageSummary?.covered ?? 0, coverageSummary?.total ?? 0)}% · dentro do prazo de cobertura`, "covered", "check"],
+            ] as const).map(([filter, label, count, helper, tone, icon]) => <button className={`coverage-summary-card coverage-summary-card--${tone}`} key={label} type="button" aria-label={`${coverageSummary ? count : "—"} ${label}`} aria-pressed={coverage === filter} onClick={() => { setCoverage(filter); setPage(1); }}><span className="coverage-summary-icon"><PropertySummaryIcon name={icon} /></span><span className="coverage-summary-copy"><span>{label}</span><strong>{coverageSummary ? count : "—"}</strong><small>{helper}</small></span></button>)}</div>
           </section>
           {reference && reference.microregions.length === 0 && (
             <section className="property-prerequisite" role="status">
@@ -471,50 +467,21 @@ export function PropertyWorkspace({
               {onOpenTerritory && <button onClick={onOpenTerritory} type="button">Ir para o mapa territorial →</button>}
             </section>
           )}
-          <div className="property-filters">
-            <select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select>
-            <input
-              aria-label="Buscar imóvel"
-              onChange={(event) => setQueryInput(event.target.value)}
-              placeholder="Buscar por rua, casa ou família"
-              value={queryInput}
-            />
-            <select
-              aria-label="Filtrar microrregião"
-              onChange={(event) => {
-                setPage(1);
-                setMicroregionId(event.target.value);
-              }}
-              value={microregionId}
-            >
-              <option value="">Todas as microrregiões</option>
-              {reference?.microregions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.code} — {item.name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filtrar cobertura"
-              onChange={(event) => {
-                setPage(1);
-                setCoverage(event.target.value);
-              }}
-              value={coverage}
-            >
-              <option value="">Toda cobertura</option>
-              <option value="pending">Pendentes: sem visita ou fora do prazo</option>
-              <option value="overdue">Fora do prazo</option>
-              <option value="neverVisited">Nunca visitado</option>
-              <option value="covered">Em dia</option>
-              <option value="notConfigured">Sem regra</option>
-            </select>
-          </div>
+          <section className="property-filter-panel" aria-labelledby="property-filter-title">
+            <div className="property-filter-heading"><div><h3 id="property-filter-title">Filtrar imóveis</h3><p>Refine a lista por cadastro, endereço, microrregião ou situação de cobertura.</p></div>{hasActiveFilters && <button onClick={clearFilters} type="button">Limpar filtros</button>}</div>
+            <div className="property-filters">
+              <label>Situação do cadastro<select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select></label>
+              <label>Buscar imóvel<input aria-label="Buscar imóvel" onChange={(event) => setQueryInput(event.target.value)} placeholder="Rua, número ou família" type="search" value={queryInput} /></label>
+              <label>Microrregião<select aria-label="Filtrar microrregião" onChange={(event) => { setPage(1); setMicroregionId(event.target.value); }} value={microregionId}><option value="">Todas as microrregiões</option>{reference?.microregions.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
+              <label>Situação da cobertura<select aria-label="Filtrar cobertura" onChange={(event) => { setPage(1); setCoverage(event.target.value); }} value={coverage}><option value="">Todas as situações</option><option value="pending">Precisam de atenção</option><option value="overdue">Fora do prazo</option><option value="neverVisited">Nunca visitado</option><option value="covered">Em dia</option><option value="notConfigured">Sem regra configurada</option></select></label>
+            </div>
+            <p className="property-result-count" aria-live="polite"><strong>{total}</strong> {pluralize(total, "imóvel encontrado", "imóveis encontrados")}</p>
+          </section>
           <div className="property-layout">
             <aside aria-label="Imóveis encontrados" className="property-list">
               {loading && <p role="status">Atualizando…</p>}
               {filtered.length === 0 && !loading && (
-                <p>Nenhum imóvel encontrado nesta UBS.</p>
+                <div className="property-list-empty"><strong>Nenhum imóvel encontrado</strong><p>Revise os filtros ou cadastre um novo imóvel.</p>{hasActiveFilters && <button onClick={clearFilters} type="button">Limpar filtros</button>}</div>
               )}
               {filtered.map((item) => (
                 <button
@@ -539,7 +506,7 @@ export function PropertyWorkspace({
                     <em>
                       {item.archivedAtUtc
                         ? "Arquivado"
-                        : translateSituation(item.situation)}
+                        : `${translateCoverage(item.coverageStatus)} · ${translateSituation(item.situation)}`}
                     </em>
                   </span>
                 </button>
@@ -989,6 +956,7 @@ function PropertyEditor({
                   <option value="Active">Ativo</option>
                   <option value="Draft">Rascunho</option>
                 </select>
+                {!editing && <small className="property-default-hint">Padrão recomendado: ativo. Altere somente se o cadastro ainda estiver incompleto.</small>}
               </label>
               <label>
                 Situação do imóvel
@@ -1002,6 +970,7 @@ function PropertyEditor({
                   <option value="Commercial">Comercial</option>
                   <option value="Other">Outro</option>
                 </select>
+                {!editing && <small className="property-default-hint">Preenchido como ocupado para reduzir etapas no cadastro mais comum.</small>}
               </label>
             </div>
             <div className="property-map-picker">
@@ -1203,6 +1172,7 @@ function VisitEditor({
               <option value="FollowUp">Acompanhamento</option>
               <option value="Attempt">Tentativa</option>
             </select>
+            {!editing && <small className="property-default-hint">Padrão: visita de rotina.</small>}
           </label>
           <label>
             Resultado
@@ -1216,6 +1186,7 @@ function VisitEditor({
               <option value="AccessBlocked">Acesso impedido</option>
               <option value="Rescheduled">Reagendada</option>
             </select>
+            {!editing && <small className="property-default-hint">Padrão: concluída. Ajuste quando o atendimento não for finalizado.</small>}
           </label>
           <label>
             Situação observada
@@ -1229,6 +1200,7 @@ function VisitEditor({
               <option value="Commercial">Comercial</option>
               <option value="Other">Outro</option>
             </select>
+            {!editing && <small className="property-default-hint">Começa com a situação já registrada para este imóvel.</small>}
           </label>
           <label className="check">
             <input
@@ -1365,7 +1337,7 @@ function Settings({
           />
           <input
             aria-label="Cor do rótulo"
-            defaultValue="#4f9a7d"
+            defaultValue="#A98BFF"
             name="color"
             type="color"
           />
@@ -1506,13 +1478,13 @@ function MapPicker({
         id: "micro-fill",
         source: "micro",
         type: "fill",
-        paint: { "fill-color": "#4f9a7d", "fill-opacity": 0.18 },
+        paint: { "fill-color": "#A98BFF", "fill-opacity": 0.18 },
       });
       map.addLayer({
         id: "micro-line",
         source: "micro",
         type: "line",
-        paint: { "line-color": "#26725f", "line-width": 2 },
+        paint: { "line-color": "#6D4AFF", "line-width": 2 },
       });
       fitBoundary(map, boundary);
     });
@@ -1591,6 +1563,21 @@ function fitBoundary(map: MapLibreMap, geometry?: Geometry) {
     return;
   }
   map.fitBounds(bounds, { padding: 36, maxZoom: 17, duration: 250 });
+}
+function PropertySummaryIcon({ name }: { name: "building" | "warning" | "calendar" | "check" }) {
+  const paths = {
+    building: <><path d="M4 21V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v16" /><path d="M9 21v-4h3v4M8 7h1m3 0h1M8 11h1m3 0h1M2 21h18" /></>,
+    warning: <><path d="M10.3 3.8 2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 4h.01" /></>,
+    calendar: <><rect height="16" rx="2" width="18" x="3" y="5" /><path d="M8 3v4m8-4v4M3 10h18M8 14h.01m4 0h.01m4 0h.01" /></>,
+    check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.7 2.7L16.5 9" /></>,
+  } as const;
+  return <svg aria-hidden="true" fill="none" height="22" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="22">{paths[name]}</svg>;
+}
+function pluralize(value: number, singular: string, plural: string) {
+  return value === 1 ? singular : plural;
+}
+function coveragePercent(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
 }
 function microName(reference: ReferenceData | null, id: string) {
   const item = reference?.microregions.find((micro) => micro.id === id);

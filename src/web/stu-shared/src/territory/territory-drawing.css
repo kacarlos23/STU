@@ -17,8 +17,8 @@
 }
 
 .geometry-tools .drawing-ready {
-  background: #176f5d;
-  border-color: #176f5d;
+  background: #6D4AFF;
+  border-color: #6D4AFF;
   color: #fff;
 }
 
@@ -30,7 +30,7 @@
 }
 
 .territory-list article[role="button"]:hover {
-  background: #f3f8f6;
+  background: #F4F1FF;
 }
 
 .territory-list article[role="button"]:focus-visible {
@@ -39,13 +39,13 @@
 }
 
 .territory-list article.territory-card-focused {
-  background: #e7f4ef;
-  box-shadow: inset 3px 0 #23705f;
+  background: #EEE9FF;
+  box-shadow: inset 3px 0 #6D4AFF;
 }
 
 .geometry-tools .osm-candidate-picker {
   background: #fff;
-  border: 1px solid #cbded8;
+  border: 1px solid #CFC8D8;
   cursor: default;
   display: grid;
   font-size: 0.6rem;
@@ -61,7 +61,7 @@
 }
 
 .geometry-tools .osm-candidate-picker small {
-  color: #638078;
+  color: #746B7E;
   font-weight: 500;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .territory-neighborhood-picker {
-  border: 1px solid #d7e1de;
+  border: 1px solid #DDD8E5;
   border-radius: 0.65rem;
   display: grid;
   gap: 0.35rem;
@@ -99,14 +99,14 @@
 }
 
 .territory-neighborhood-picker legend {
-  color: #49635c;
+  color: #51465D;
   font-size: 0.62rem;
   font-weight: 800;
   padding: 0 0.25rem;
 }
 
 .territory-neighborhood-picker > small {
-  color: #71857f;
+  color: #746B7E;
   font-size: 0.56rem;
 }
 
@@ -120,9 +120,9 @@
 
 .territory-neighborhood-picker label {
   align-items: center;
-  background: #f5f8f7;
+  background: #F8F7FB;
   border-radius: 0.45rem;
-  color: #405f57;
+  color: #51465D;
   cursor: pointer;
   display: grid;
   font-size: 0.58rem;
@@ -133,12 +133,12 @@
 }
 
 .territory-neighborhood-picker input {
-  accent-color: #176f5d;
+  accent-color: #6D4AFF;
   margin: 0;
 }
 
 .territory-field-help {
-  color: #71857f;
+  color: #746B7E;
   font-size: 0.56rem;
   font-weight: 500;
 }
@@ -153,7 +153,7 @@
 }
 
 .territory-color-field > span {
-  color: #49635c;
+  color: #51465D;
   font-size: 0.62rem;
   font-weight: 800;
 }
@@ -161,9 +161,9 @@
 .territory-color-trigger {
   align-items: center;
   background: #fff;
-  border: 1px solid #d7e1de;
+  border: 1px solid #DDD8E5;
   border-radius: 0.55rem;
-  color: #35564e;
+  color: #3D3447;
   display: grid;
   gap: 0.5rem;
   grid-template-columns: auto auto auto;
@@ -180,20 +180,20 @@
 }
 
 .territory-color-trigger output {
-  color: #5e756e;
+  color: #5F556A;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.65rem;
   text-transform: uppercase;
 }
 
 .territory-color-trigger b {
-  color: #789088;
+  color: #746B7E;
   font-size: 0.48rem;
 }
 
 .territory-color-palette {
   background: #fff;
-  border: 1px solid #d7e1de;
+  border: 1px solid #DDD8E5;
   border-radius: 0.65rem;
   box-shadow: 0 0.8rem 2rem rgba(20, 42, 36, 0.18);
   display: grid;
@@ -218,7 +218,7 @@
 }
 
 .territory-color-palette button[aria-pressed="true"] {
-  box-shadow: 0 0 0 3px #173b35;
+  box-shadow: 0 0 0 3px #261F32;
 }
 
 @media (max-width: 900px) {

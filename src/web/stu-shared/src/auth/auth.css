@@ -1,10 +1,10 @@
 .stu-auth-page {
-  --auth-accent: #167865;
-  --auth-accent-strong: #0d594a;
-  --auth-ink: #163a34;
-  --auth-muted: #60736f;
+  --auth-accent: #6D4AFF;
+  --auth-accent-strong: #4F2C73;
+  --auth-ink: #261F32;
+  --auth-muted: #746B7E;
   --auth-surface: #ffffff;
-  background: #edf4f1;
+  background: #EEE9FF;
   color: var(--auth-ink);
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
@@ -12,16 +12,16 @@
 }
 
 .stu-auth-page--admin {
-  --auth-accent: #9b6729;
-  --auth-accent-strong: #714716;
-  --auth-ink: #3b2b19;
-  --auth-muted: #746553;
-  background: #f5f0e8;
+  --auth-accent: #6D4AFF;
+  --auth-accent-strong: #4F2C73;
+  --auth-ink: #261F32;
+  --auth-muted: #746B7E;
+  background: #F8F7FB;
 }
 
 .stu-auth-story {
-  background: linear-gradient(145deg, #0d574a 0%, #123e38 65%, #172f2c 100%);
-  color: #f4fbf8;
+  background: #2F1B4D;
+  color: #f8f7fb;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -31,7 +31,7 @@
 }
 
 .stu-auth-page--admin .stu-auth-story {
-  background: linear-gradient(145deg, #573913 0%, #3c2b17 65%, #2b251c 100%);
+  background: #241336;
 }
 
 .stu-auth-brand {
@@ -49,9 +49,9 @@
 .stu-auth-mark,
 .stu-auth-mobile-brand {
   align-items: center;
-  background: #f4fbf8;
+  background: #f8f7fb;
   border-radius: 0.7rem;
-  color: #155f51;
+  color: #4F2C73;
   display: inline-flex;
   font-size: 0.78rem;
   font-weight: 900;
@@ -79,11 +79,11 @@
 }
 
 .stu-auth-story .stu-auth-kicker {
-  color: #8ed6c5;
+  color: #D9CCFF;
 }
 
 .stu-auth-page--admin .stu-auth-story .stu-auth-kicker {
-  color: #e0bb83;
+  color: #D9CCFF;
 }
 
 .stu-auth-story h1 {
@@ -95,7 +95,7 @@
 }
 
 .stu-auth-story p {
-  color: rgba(244, 251, 248, 0.73);
+  color: rgba(248, 247, 251, 0.76);
   font-size: 1.08rem;
   line-height: 1.7;
   max-width: 570px;
@@ -109,7 +109,7 @@
 }
 
 .stu-auth-territory span {
-  border: 1px solid rgba(163, 224, 209, 0.5);
+  border: 1px solid rgba(169, 139, 255, 0.46);
   border-radius: 48% 52% 61% 39% / 46% 42% 58% 54%;
   display: block;
   height: 23rem;
@@ -133,9 +133,9 @@
 
 .stu-auth-card {
   background: var(--auth-surface);
-  border: 1px solid rgba(32, 80, 71, 0.1);
+  border: 1px solid rgba(47, 27, 77, 0.1);
   border-radius: 1.5rem;
-  box-shadow: 0 1.5rem 4rem rgba(18, 54, 47, 0.1);
+  box-shadow: 0 1.5rem 4rem rgba(47, 27, 77, 0.1);
   max-width: 470px;
   padding: clamp(1.75rem, 4vw, 3rem);
   width: 100%;
@@ -171,8 +171,8 @@
 }
 
 .stu-auth-field input {
-  background: #f8faf9;
-  border: 1px solid #cbd9d5;
+  background: #F8F7FB;
+  border: 1px solid #CFC8D8;
   border-radius: 0.8rem;
   color: var(--auth-ink);
   min-height: 3.15rem;
@@ -234,7 +234,7 @@
 
 .stu-auth-loading {
   align-items: center;
-  background: #edf4f1;
+  background: #EEE9FF;
   color: #254f47;
   display: flex;
   flex-direction: column;
@@ -245,9 +245,9 @@
 
 .stu-auth-spinner {
   animation: stu-spin 800ms linear infinite;
-  border: 3px solid #c4dbd5;
+  border: 3px solid #CFC8D8;
   border-radius: 50%;
-  border-top-color: #167865;
+  border-top-color: #6D4AFF;
   height: 2rem;
   width: 2rem;
 }
@@ -257,7 +257,7 @@
 .stu-auth-card--compact { margin: auto; }
 .stu-auth-mark { background: var(--auth-accent); color: white; margin-bottom: 2rem; }
 .stu-auth-check { align-items: center; color: var(--auth-muted); display: flex; font-size: .86rem; gap: .55rem; margin-top: 1rem; }
-.stu-auth-rules { background: #f3f7f5; border-radius: .7rem; color: var(--auth-muted); font-size: .8rem; line-height: 1.5; margin-top: 1rem; padding: .8rem; }
+.stu-auth-rules { background: #F4F1FF; border-radius: .7rem; color: var(--auth-muted); font-size: .8rem; line-height: 1.5; margin-top: 1rem; padding: .8rem; }
 
 @keyframes stu-spin { to { transform: rotate(360deg); } }
 

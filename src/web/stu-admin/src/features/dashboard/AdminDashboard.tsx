@@ -115,8 +115,8 @@ function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
         {section === 'territories' && <Suspense fallback={<div className="admin-error">Carregando o mapa…</div>}><TerritoryWorkspace global session={session} /></Suspense>}
         {section === 'coverage' && <Suspense fallback={<div className="admin-error">Carregando imóveis e cobertura…</div>}><PropertyWorkspace global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
         {section === 'workflows' && <Suspense fallback={<div className="admin-error">Carregando os fluxos operacionais…</div>}><OperationalWorkspace global session={session} /></Suspense>}
-        {section === 'onboarding' && <Suspense fallback={<div className="admin-error">Verificando a pré-implantação…</div>}><OnboardingWorkspace global session={session} /></Suspense>}
-        {section === 'pilot-release' && <Suspense fallback={<div className="admin-error">Conferindo a liberação…</div>}><PilotReleaseWorkspace global session={session} /></Suspense>}
+        {section === 'onboarding' && <Suspense fallback={<div className="admin-error">Verificando a pré-implantação…</div>}><OnboardingWorkspace actions={{ territory: () => setSection('territories'), coverage: () => setSection('coverage'), operations: () => setSection('workflows'), users: () => setSection('users'), backups: () => setSection('backups') }} global session={session} /></Suspense>}
+        {section === 'pilot-release' && <Suspense fallback={<div className="admin-error">Conferindo a liberação…</div>}><PilotReleaseWorkspace actions={{ onboarding: () => setSection('onboarding'), operations: () => setSection('workflows'), backups: () => setSection('backups'), monitoring: () => setSection('monitoring') }} global session={session} /></Suspense>}
         {section === 'users' && <UsersManager currentUserId={session.id} onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'roles' && <RolesManager onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'backups' && <BackupsManager />}

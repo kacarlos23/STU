@@ -1,6 +1,6 @@
 .territory-microregion-heading {
   align-items: end;
-  border-top: 1px solid #e4ebe9;
+  border-top: 1px solid #EEE9FF;
   display: flex;
   justify-content: space-between;
   margin-top: 0.8rem;
@@ -17,12 +17,12 @@
 }
 
 .territory-microregion-heading > span small {
-  color: #81918d;
+  color: #746B7E;
   font-size: 0.56rem;
 }
 
 .territory-microregion-heading > label {
-  color: #6e817c;
+  color: #746B7E;
   display: grid;
   font-size: 0.54rem;
   font-weight: 800;
@@ -31,9 +31,9 @@
 
 .territory-microregion-heading select {
   background: #fff;
-  border: 1px solid #d7e1de;
+  border: 1px solid #DDD8E5;
   border-radius: 0.4rem;
-  color: #35564e;
+  color: #3D3447;
   font-size: 0.56rem;
   min-height: 2rem;
   padding: 0.35rem 0.45rem;
@@ -64,11 +64,11 @@
 }
 
 .territory-list article button.territory-restore-action {
-  background: #e4f1ed;
-  color: #176f5d;
+  background: #EEE9FF;
+  color: #6D4AFF;
   font-weight: 800;
 }
-.territory-impact { border: 1px solid #d7e1de; border-radius: .6rem; margin-top: .75rem; padding: .75rem; font-size: .75rem; }
+.territory-impact { border: 1px solid #DDD8E5; border-radius: .6rem; margin-top: .75rem; padding: .75rem; font-size: .75rem; }
 .territory-impact ol { max-height: 12rem; overflow: auto; padding-left: 1.5rem; }
 .territory-impact li { margin: .6rem 0; }
 .territory-impact li span { display: block; margin-top: .2rem; }

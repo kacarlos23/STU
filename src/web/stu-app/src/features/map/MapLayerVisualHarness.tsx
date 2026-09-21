@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { TerritoryWorkspace } from "@stu/shared/territory";
 import { InteractionProvider, type Session } from "@stu/shared";
 import "../../styles/global.css";
+import "../../styles/purple-theme.css";
 
 const healthUnit = {
   id: "visual-unit",

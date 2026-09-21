@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { Session } from '../auth/types'
 import { useAccessibleDialog } from '../accessibility/useAccessibleDialog'
 import './health-unit-users.css'
@@ -12,13 +12,17 @@ export function HealthUnitUsersWorkspace({ session }: { session: Session }) {
   const [users, setUsers] = useState<User[]>([])
   const [reference, setReference] = useState<Reference | null>(null)
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null)
   const [editing, setEditing] = useState<User | 'new' | null>(null)
   const [credentials, setCredentials] = useState<Credentials | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const actionMenu = useRef<HTMLDivElement>(null)
 
-  const load = useCallback(async (search = query) => {
+  const load = useCallback(async (search = '') => {
     setLoading(true)
     try {
       const [usersResponse, referenceResponse] = await Promise.all([
@@ -31,9 +35,17 @@ export function HealthUnitUsersWorkspace({ session }: { session: Session }) {
       setError(null)
     } catch (caught) { setError(messageOf(caught)) }
     finally { setLoading(false) }
-  }, [query])
+  }, [])
 
   useEffect(() => { void load('') }, []) // oxlint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!openActionsId) return
+    function dismiss(event: PointerEvent) { if (!actionMenu.current?.contains(event.target as Node)) setOpenActionsId(null) }
+    function dismissWithKeyboard(event: KeyboardEvent) { if (event.key === 'Escape') setOpenActionsId(null) }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', dismissWithKeyboard)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', dismissWithKeyboard) }
+  }, [openActionsId])
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -70,19 +82,57 @@ export function HealthUnitUsersWorkspace({ session }: { session: Session }) {
 
   const activeCount = users.filter(user => !user.archivedAtUtc).length
   const pendingCount = users.filter(user => !user.archivedAtUtc && user.mustChangePassword).length
+  const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR')
+  const filteredUsers = users.filter(user => {
+    const matchesQuery = !normalizedQuery || `${user.displayName} ${user.userName}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
+    const matchesStatus = statusFilter === 'all' || statusOf(user) === statusFilter
+    const matchesRole = roleFilter === 'all' || user.role?.name === roleFilter
+    return matchesQuery && matchesStatus && matchesRole
+  })
+  const hasActiveFilters = Boolean(normalizedQuery) || statusFilter !== 'all' || roleFilter !== 'all'
+  function clearFilters() { setQuery(''); setStatusFilter('all'); setRoleFilter('all') }
   return <section className="unit-users-workspace">
-    <header className="unit-users-heading"><div><span>Equipe da UBS</span><h2>Servidores cadastrados</h2><p>Contas individuais vinculadas exclusivamente à {reference?.healthUnit.name ?? session.healthUnit?.name ?? 'sua UBS'}.</p></div><button onClick={() => setEditing('new')} type="button">＋ Adicionar servidor</button></header>
+    <header className="unit-users-heading"><div><h2>Servidores cadastrados</h2><p>Contas individuais vinculadas exclusivamente à {reference?.healthUnit.name ?? session.healthUnit?.name ?? 'sua UBS'}.</p></div><button onClick={() => setEditing('new')} type="button">＋ Adicionar servidor</button></header>
     {error && <div className="unit-users-message unit-users-error" role="alert">{error}<button aria-label="Dispensar erro" onClick={() => setError(null)} type="button">×</button></div>}
     {notice && <div className="unit-users-message" role="status">{notice}<button aria-label="Dispensar aviso" onClick={() => setNotice(null)} type="button">×</button></div>}
-    <section className="unit-users-metrics" aria-label="Resumo da equipe"><article><small>Contas ativas</small><strong>{activeCount}</strong></article><article><small>Primeiro acesso pendente</small><strong>{pendingCount}</strong></article><article><small>Funções disponíveis</small><strong>{reference?.roles.length ?? 0}</strong></article></section>
-    <form className="unit-users-search" onSubmit={event => { event.preventDefault(); void load() }}><input aria-label="Buscar servidor" onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome ou usuário" value={query} /><button disabled={loading} type="submit">Buscar</button></form>
-    <div className="unit-users-table-wrap"><table className="unit-users-table"><thead><tr><th>Servidor</th><th>Função</th><th>Situação</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{users.map(user => <tr className={user.archivedAtUtc ? 'archived' : ''} key={user.id}><td><strong>{user.displayName}</strong><small>@{user.userName}</small></td><td>{user.role?.displayName ?? 'Sem função'}</td><td><Status user={user} /></td><td>{user.manageable ? <div className="unit-users-actions"><button disabled={Boolean(user.archivedAtUtc)} onClick={() => setEditing(user)} type="button">Editar</button><button disabled={Boolean(user.archivedAtUtc)} onClick={() => void resetPassword(user)} type="button">Senha</button><button onClick={() => void toggleArchive(user)} type="button">{user.archivedAtUtc ? 'Reativar' : 'Arquivar'}</button></div> : <small className="unit-users-protected">Gerência protegida</small>}</td></tr>)}</tbody></table>{users.length === 0 && !loading && <div className="unit-users-empty"><strong>Nenhum servidor encontrado</strong><p>Use “Adicionar servidor” para criar a primeira conta da equipe.</p></div>}{loading && <p className="unit-users-loading" role="status">Atualizando servidores…</p>}</div>
+    <section className="unit-users-metrics" aria-label="Resumo da equipe">
+      <TeamMetric icon="users" label="Contas ativas" helper={pluralize(activeCount, 'servidor com acesso', 'servidores com acesso')} value={activeCount} />
+      <TeamMetric icon="key" label="Primeiro acesso pendente" helper={pendingCount ? 'Precisam trocar a senha temporária' : 'Nenhuma troca de senha pendente'} tone="amber" value={pendingCount} />
+      <TeamMetric icon="roles" label="Funções disponíveis" helper="Perfis que podem ser atribuídos" tone="blue" value={reference?.roles.length ?? 0} />
+    </section>
+    <section className="unit-users-filter-panel" aria-labelledby="unit-users-filter-title">
+      <div className="unit-users-filter-heading"><div><h3 id="unit-users-filter-title">Buscar e filtrar equipe</h3><p>Localize uma conta e refine a lista por situação ou função.</p></div>{hasActiveFilters && <button onClick={clearFilters} type="button">Limpar filtros</button>}</div>
+      <div className="unit-users-filters">
+        <label className="unit-users-search">Buscar servidor<span><SearchIcon /><input onChange={event => setQuery(event.target.value)} placeholder="Nome ou usuário" type="search" value={query} /></span></label>
+        <label>Situação<select onChange={event => setStatusFilter(event.target.value)} value={statusFilter}><option value="all">Todas as situações</option><option value="active">Ativos</option><option value="pending">Primeiro acesso pendente</option><option value="locked">Bloqueados</option><option value="archived">Arquivados</option></select></label>
+        <label>Função<select onChange={event => setRoleFilter(event.target.value)} value={roleFilter}><option value="all">Todas as funções</option>{reference?.roles.map(role => <option key={role.id} value={role.name}>{role.displayName}</option>)}</select></label>
+      </div>
+      <p className="unit-users-result-count" aria-live="polite"><strong>{filteredUsers.length}</strong> {pluralize(filteredUsers.length, 'servidor encontrado', 'servidores encontrados')}</p>
+    </section>
+    <div className="unit-users-table-wrap"><table className="unit-users-table"><thead><tr><th>Servidor</th><th>Função</th><th>Situação</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{filteredUsers.map(user => <tr className={user.archivedAtUtc ? 'archived' : ''} key={user.id}><td data-label="Servidor"><div className="unit-user-identity"><span aria-hidden="true" className="unit-user-avatar">{initials(user.displayName)}</span><span><strong>{user.displayName}</strong><small>@{user.userName}</small></span></div></td><td data-label="Função">{user.role?.displayName ?? 'Sem função'}</td><td data-label="Situação"><Status user={user} /></td><td data-label="Ações">{user.manageable ? <div className="unit-users-actions"><button disabled={Boolean(user.archivedAtUtc)} onClick={() => setEditing(user)} type="button">Editar</button><button disabled={Boolean(user.archivedAtUtc)} onClick={() => void resetPassword(user)} type="button">Redefinir senha</button><div className="unit-users-overflow" ref={openActionsId === user.id ? actionMenu : undefined}><button aria-expanded={openActionsId === user.id} aria-haspopup="menu" aria-label={`Mais ações para ${user.displayName}`} onClick={() => setOpenActionsId(current => current === user.id ? null : user.id)} type="button">•••</button>{openActionsId === user.id && <div className="unit-users-action-menu" role="menu"><button onClick={() => { setOpenActionsId(null); void toggleArchive(user) }} role="menuitem" type="button">{user.archivedAtUtc ? 'Reativar conta' : 'Arquivar conta'}</button></div>}</div></div> : <small className="unit-users-protected">Conta protegida</small>}</td></tr>)}</tbody></table>{filteredUsers.length === 0 && !loading && <div className="unit-users-empty"><strong>Nenhum servidor encontrado</strong><p>{hasActiveFilters ? 'Tente ajustar ou limpar os filtros aplicados.' : 'Use “Adicionar servidor” para criar a primeira conta da equipe.'}</p>{hasActiveFilters && <button onClick={clearFilters} type="button">Limpar filtros</button>}</div>}{loading && <p className="unit-users-loading" role="status">Atualizando servidores…</p>}</div>
     {editing && reference && <UserEditor item={editing} roles={reference.roles} busy={loading} onClose={() => setEditing(null)} onSubmit={save} />}
     {credentials && <CredentialsDialog credentials={credentials} onClose={() => setCredentials(null)} />}
   </section>
 }
 
-function Status({ user }: { user: User }) { if (user.archivedAtUtc) return <span className="unit-user-status archived">Arquivado</span>; if (user.lockoutEnd && new Date(user.lockoutEnd) > new Date()) return <span className="unit-user-status locked">Bloqueado</span>; if (user.mustChangePassword) return <span className="unit-user-status pending">Senha temporária</span>; return <span className="unit-user-status active">Ativo</span> }
+function TeamMetric({ icon, label, helper, tone = 'green', value }: { icon: 'users' | 'key' | 'roles'; label: string; helper: string; tone?: string; value: number }) {
+  return <article className={`unit-users-metric unit-users-metric--${tone}`}><span className="unit-users-metric-icon"><TeamMetricIcon name={icon} /></span><span><small>{label}</small><strong>{value}</strong><p>{helper}</p></span></article>
+}
+
+function TeamMetricIcon({ name }: { name: 'users' | 'key' | 'roles' }) {
+  const paths = {
+    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></>,
+    key: <><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8m-2 2 2 2m-5 1 2 2" /></>,
+    roles: <><rect height="16" rx="2" width="18" x="3" y="4" /><circle cx="9" cy="10" r="2" /><path d="M6 16c.6-1.5 1.6-2 3-2s2.4.5 3 2m3-6h3m-3 4h3" /></>,
+  } as const
+  return <svg aria-hidden="true" fill="none" height="22" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="22">{paths[name]}</svg>
+}
+
+function SearchIcon() { return <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="18"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg> }
+function statusOf(user: User) { if (user.archivedAtUtc) return 'archived'; if (user.lockoutEnd && new Date(user.lockoutEnd) > new Date()) return 'locked'; if (user.mustChangePassword) return 'pending'; return 'active' }
+function Status({ user }: { user: User }) { const status = statusOf(user); return <span className={`unit-user-status ${status}`}>{status === 'archived' ? 'Arquivado' : status === 'locked' ? 'Bloqueado' : status === 'pending' ? 'Senha temporária' : 'Ativo'}</span> }
+function initials(value: string) { return value.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') }
+function pluralize(value: number, singular: string, plural: string) { return value === 1 ? singular : plural }
 
 function UserEditor({ item, roles, busy, onClose, onSubmit }: { item: User | 'new'; roles: Role[]; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void> }) {
   const titleId = useId(); const dialogRef = useAccessibleDialog<HTMLFormElement>(true, onClose)

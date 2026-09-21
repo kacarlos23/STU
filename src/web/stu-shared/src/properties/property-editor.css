@@ -8,7 +8,7 @@
 
 .location-pending {
   background: #fff7e9;
-  color: #806536;
+  color: #7C5AC7;
 }
 
 .location-valid {
@@ -32,4 +32,11 @@
 .property-modal footer button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.property-default-hint {
+  color: #746B7E;
+  font-size: .54rem;
+  font-weight: 500;
+  line-height: 1.35;
 }

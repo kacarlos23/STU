@@ -1,15 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 export const territoryColorOptions = [
-  "#2e8b72",
-  "#4f9a7d",
-  "#2563eb",
-  "#7c3aed",
-  "#db2777",
-  "#dc2626",
-  "#d97706",
-  "#65a30d",
-  "#475569",
+  "#6D4AFF",
+  "#A98BFF",
+  "#C05A9D",
+  "#7C5AC7",
+  "#4F2C73",
+  "#8B6FD6",
+  "#B96CB0",
+  "#5C3BB8",
+  "#3A245A",
 ] as const;
 
 export function TerritoryColorPicker({

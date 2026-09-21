@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import type { Session } from '../auth/types'
 import './pilot-release.css'
+import './pilot-release-progress.css'
 
 type Unit = { id: string; code: string; name: string; archivedAtUtc?: string | null }
 type Check = { id: string; label: string; status: 'passed' | 'blocked'; detail: string }
+export type PilotReleaseDestination = 'onboarding' | 'operations' | 'backups' | 'monitoring'
 type Decision = {
   decision: 'go' | 'no-go'; recordedAtUtc: string; recordedBy: string; releaseSnapshotHash: string | null
   supportOwner: string | null; incidentOwner: string | null; rollbackOwner: string | null; note: string | null; current: boolean
@@ -27,7 +29,7 @@ const runbooks = [
   { title: 'Restauração', steps: ['Interromper escritas e gerar uma cópia de segurança do estado atual.', 'Restaurar primeiro em ambiente isolado e validar acesso, contagens e geometrias.', 'Somente então autorizar retorno, documentando responsável e horário.'] },
 ]
 
-export function PilotReleaseWorkspace({ session, global = false }: { session: Session; global?: boolean }) {
+export function PilotReleaseWorkspace({ session, global = false, actions }: { session: Session; global?: boolean; actions?: Partial<Record<PilotReleaseDestination, () => void>> }) {
   const [units, setUnits] = useState<Unit[]>(session.healthUnit ? [session.healthUnit] : [])
   const [unitId, setUnitId] = useState(session.healthUnit?.id ?? '')
   const [report, setReport] = useState<Report | null>(null)
@@ -98,6 +100,12 @@ export function PilotReleaseWorkspace({ session, global = false }: { session: Se
     }
   }
 
+  const passedChecks = report?.checks.filter(item => item.status === 'passed').length ?? 0
+  const blockedChecks = report?.checks.filter(item => item.status === 'blocked') ?? []
+  const completion = report?.checks.length ? Math.round((passedChecks / report.checks.length) * 100) : 0
+  const nextStep = blockedChecks[0]
+  const nextAction = nextStep ? actionForCheck(nextStep) : null
+
   return <section className="release-workspace">
     <header className="release-heading"><div><span>Decisão controlada</span><h2>Liberação do piloto</h2><p>Consolide as evidências, responsáveis e confirmações humanas antes do início operacional.</p></div><div>{units.length > 1 && <label>UBS<select onChange={event => setUnitId(event.target.value)} value={unitId}>{units.map(unit => <option key={unit.id} value={unit.id}>{unit.code} — {unit.name}</option>)}</select></label>}<button disabled={loading || !unitId} onClick={() => void load()} type="button">Atualizar</button><button onClick={() => window.print()} type="button">Imprimir guia</button></div></header>
     {error && <div className="release-message release-message--error" role="alert">{error}</div>}
@@ -105,7 +113,11 @@ export function PilotReleaseWorkspace({ session, global = false }: { session: Se
     {loading && !report ? <p className="release-loading" role="status">Conferindo o portão final…</p> : report && <>
       <section className={`release-decision ${report.released ? 'released' : report.readyForDecision ? 'ready' : 'blocked'}`} aria-label="Situação da liberação"><div aria-hidden="true">{report.released ? '✓' : report.readyForDecision ? '→' : '!'}</div><div><span>{report.healthUnit.code}</span><h3>{report.released ? 'Piloto formalmente liberado' : report.readyForDecision ? 'Controles automáticos aprovados' : 'Liberação bloqueada por pendências'}</h3><p>{report.released ? 'A decisão corresponde ao estado atual das evidências.' : report.readyForDecision ? 'Realize as confirmações humanas e registre a decisão.' : 'Corrija os itens abaixo; ainda é possível registrar uma decisão de não liberar.'}</p></div><small>{new Date(report.generatedAtUtc).toLocaleString('pt-BR')}</small></section>
 
-      <div className="release-layout"><section className="release-checks"><header><div><span>Portão automático</span><h3>Evidências obrigatórias</h3></div><strong>{report.checks.filter(item => item.status === 'passed').length}/{report.checks.length}</strong></header>{report.checks.map(item => <article className={item.status === 'passed' ? 'passed' : 'blocked'} key={item.id}><i aria-hidden="true">{item.status === 'passed' ? '✓' : '!'}</i><div><strong>{item.label}</strong><p>{item.detail}</p></div><span>{item.status === 'passed' ? 'Aprovado' : 'Bloqueado'}</span></article>)}</section>
+      <section className="release-progress" aria-label={`Progresso da liberação: ${completion}%`}><div><span>Portão de liberação</span><strong>{passedChecks} de {report.checks.length} evidências aprovadas</strong><small>{blockedChecks.length ? `${blockedChecks.length} bloqueio${blockedChecks.length === 1 ? '' : 's'} restante${blockedChecks.length === 1 ? '' : 's'}` : 'Controles automáticos concluídos'}</small></div><div aria-hidden="true" className="release-progress-track"><i style={{ width: `${completion}%` }} /></div><b>{completion}%</b></section>
+
+      {nextStep && <section className="release-next" aria-label="Próxima ação recomendada"><div><span>Próxima ação</span><h3>{nextStep.label}</h3><p>{nextStep.detail}</p></div>{nextAction && actions?.[nextAction.destination] ? <button onClick={actions[nextAction.destination]} type="button">{nextAction.label}</button> : <small>{nextAction?.label ?? 'A correção depende da administração técnica.'}</small>}</section>}
+
+      <div className="release-layout"><section className="release-checks"><header><div><span>Portão automático</span><h3>Evidências obrigatórias</h3></div><strong>{passedChecks}/{report.checks.length}</strong></header>{report.checks.map(item => { const action = actionForCheck(item); const handler = action ? actions?.[action.destination] : undefined; return <article className={item.status === 'passed' ? 'passed' : 'blocked'} key={item.id}><i aria-hidden="true">{item.status === 'passed' ? '✓' : '!'}</i><div><strong>{item.label}</strong><p>{item.detail}</p>{item.status === 'blocked' && action && handler && <button onClick={handler} type="button">{action.label}</button>}</div><span>{item.status === 'passed' ? 'Aprovado' : 'Bloqueado'}</span></article>})}</section>
         <aside className="release-latest"><span>Registro auditado</span><h3>Última decisão</h3>{report.latestDecision ? <><strong>{report.latestDecision.decision === 'go' ? 'Liberar' : 'Não liberar'}</strong><p>{report.latestDecision.current ? 'Válida para as evidências atuais.' : 'Desatualizada após mudanças no sistema.'}</p><small>{new Date(report.latestDecision.recordedAtUtc).toLocaleString('pt-BR')} por {report.latestDecision.recordedBy}</small>{report.latestDecision.note && <blockquote>{report.latestDecision.note}</blockquote>}</> : <p>Nenhuma decisão registrada.</p>}<h4>Documentos técnicos</h4><ul>{report.evidence.map(item => <li key={item.document}>{item.label}<small>{item.document}</small></li>)}</ul></aside>
       </div>
 
@@ -121,5 +133,12 @@ export function PilotReleaseWorkspace({ session, global = false }: { session: Se
 }
 
 function messageOf(caught: unknown) { return caught instanceof Error ? caught.message : 'Não foi possível concluir a operação.' }
+function actionForCheck(check: Check): { destination: PilotReleaseDestination; label: string } | null {
+  if (['onboarding', 'offsite-backup'].includes(check.id)) return { destination: 'onboarding', label: 'Voltar à pré-implantação' }
+  if (check.id === 'operations') return { destination: 'operations', label: 'Revisar operações' }
+  if (check.id === 'recent-backup') return { destination: 'backups', label: 'Revisar backups' }
+  if (['worker', 'storage'].includes(check.id)) return { destination: 'monitoring', label: 'Abrir monitoramento' }
+  return null
+}
 async function csrfToken() { const response = await fetch('/api/auth/csrf', { credentials: 'include' }); if (!response.ok) throw new Error('Sua sessão precisa ser renovada.'); return (await response.json() as { token: string }).token }
 async function ensureOk(response: Response) { if (response.ok) return; const problem = await response.json().catch(() => ({})) as { title?: string; detail?: string; errors?: Record<string, string[]> }; throw new Error(problem.detail ?? Object.values(problem.errors ?? {})[0]?.[0] ?? problem.title ?? 'Não foi possível concluir a operação.') }

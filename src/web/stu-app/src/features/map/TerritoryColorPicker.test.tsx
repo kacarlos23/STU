@@ -6,7 +6,7 @@ afterEach(cleanup);
 
 describe("seletor de cor territorial", () => {
   it("abre e fecha a paleta ao clicar novamente no mesmo controle", () => {
-    render(<TerritoryColorPicker onChange={vi.fn()} value="#2e8b72" />);
+    render(<TerritoryColorPicker onChange={vi.fn()} value="#6D4AFF" />);
     const trigger = screen.getByRole("button", { name: /Escolher cor da área/i });
 
     fireEvent.click(trigger);
@@ -18,7 +18,7 @@ describe("seletor de cor territorial", () => {
 
   it("fecha ao clicar fora e após escolher uma cor", () => {
     const onChange = vi.fn();
-    render(<TerritoryColorPicker onChange={onChange} value="#2e8b72" />);
+    render(<TerritoryColorPicker onChange={onChange} value="#6D4AFF" />);
     const trigger = screen.getByRole("button", { name: /Escolher cor da área/i });
 
     fireEvent.click(trigger);
@@ -26,8 +26,8 @@ describe("seletor de cor territorial", () => {
     expect(screen.queryByRole("group", { name: "Cores disponíveis" })).toBeNull();
 
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole("button", { name: "Usar cor #2563eb" }));
-    expect(onChange).toHaveBeenCalledWith("#2563eb");
+    fireEvent.click(screen.getByRole("button", { name: "Usar cor #A98BFF" }));
+    expect(onChange).toHaveBeenCalledWith("#A98BFF");
     expect(screen.queryByRole("group", { name: "Cores disponíveis" })).toBeNull();
   });
 });
