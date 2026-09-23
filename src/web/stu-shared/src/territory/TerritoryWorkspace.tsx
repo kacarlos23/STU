@@ -1468,7 +1468,7 @@ export function TerritoryWorkspace({
                     Usar centro como ponto
                   </button>
                 )}
-                <label>
+                <label className="geometry-import-button">
                   Importar mapa
                   <input
                     accept=".json,.geojson,.osm,.xml,application/geo+json,application/xml,text/xml"
