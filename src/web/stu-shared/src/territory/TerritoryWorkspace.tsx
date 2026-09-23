@@ -9,6 +9,7 @@ import "./territory-archive.css";
 import "./territory-ux.css";
 import type { Session } from "../auth/types";
 import { useAccessibleDialog } from "../accessibility/useAccessibleDialog";
+import { CloseIcon } from "../components/CloseIcon";
 import { useUiActions, useUnsavedChanges } from "../interaction/InteractionProvider";
 import { TerritoryComparison } from "./TerritoryComparison";
 import {
@@ -1332,15 +1333,23 @@ export function TerritoryWorkspace({
                   {editor === "neighborhood" ? "Bairro" : "Microrregião"}
                 </h3>
               </div>
-              <button aria-label="Fechar editor de território" onClick={cancel} type="button">
-                ×
+              <button
+                aria-label="Fechar editor de território"
+                className="stu-close-button"
+                onClick={cancel}
+                type="button"
+              >
+                <CloseIcon />
               </button>
             </header>
-            <section className="territory-editor-progress" aria-label="Etapas da edição territorial">
-              <div className={hasDraftGeometry ? "complete" : "active"}><i>1</i><span><strong>Identificação</strong><small>Nome e origem</small></span></div>
-              <div className={draftGeometry ? "complete" : draftPoints.length ? "active" : ""}><i>2</i><span><strong>Geometria</strong><small>{draftGeometry ? "Contorno pronto" : "Desenhar ou importar"}</small></span></div>
-              {editor === "microregion" && <div className={previewed ? "complete" : draftGeometry ? "active" : ""}><i>3</i><span><strong>Impacto</strong><small>{previewed ? "Validado" : "Conferir vínculos"}</small></span></div>}
-              <div className={(editor === "neighborhood" && draftGeometry) || previewed ? "active" : ""}><i>{editor === "microregion" ? 4 : 3}</i><span><strong>Salvar</strong><small>Versionar mudança</small></span></div>
+            <section
+              className={`territory-editor-progress territory-editor-progress--${editor === "microregion" ? "four" : "three"}`}
+              aria-label="Etapas da edição territorial"
+            >
+              <div className={hasDraftGeometry ? "complete" : "active"}><i>1</i><strong>Identificação</strong></div>
+              <div className={draftGeometry ? "complete" : draftPoints.length ? "active" : ""}><i>2</i><strong>Geometria</strong></div>
+              {editor === "microregion" && <div className={previewed ? "complete" : draftGeometry ? "active" : ""}><i>3</i><strong>Impacto</strong></div>}
+              <div className={(editor === "neighborhood" && draftGeometry) || previewed ? "active" : ""}><i>{editor === "microregion" ? 4 : 3}</i><strong>Salvar</strong></div>
             </section>
             {formDirty && <p className="territory-draft-status" role="status">Rascunho mantido nesta edição · nada foi enviado até você salvar.</p>}
             {editor === "microregion" &&
@@ -1530,7 +1539,7 @@ export function TerritoryWorkspace({
             {error && <div className="territory-message territory-error" role="alert">{error}</div>}
             {notice && <div className="territory-message" role="status">{notice}</div>}
             {impact && <TerritoryImpactPanel impact={impact} />}
-            {editing && draftGeometry && <button type="button" onClick={() => setComparing(true)}>Comparar limites</button>}
+            {editing && draftGeometry && <button className="territory-compare-button" type="button" onClick={() => setComparing(true)}>Comparar limites</button>}
             {comparing && editing && draftGeometry && <TerritoryComparison before={editing.geometry} after={draftGeometry} validated={Boolean(impact)} onClose={() => setComparing(false)} />}
             <p className="territory-warning">
               Não inclua nomes de moradores, dados pessoais ou informações

@@ -32,6 +32,35 @@ textarea {
   font: inherit;
 }
 
+:where(button, input, select, textarea, [role="button"], label[class*="button"]) {
+  border: 0 !important;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) {
+  background-color: #fbfaf8 !important;
+}
+
+:where(button, input, select, textarea, [role="button"], label[class*="button"]):focus-visible {
+  outline: 3px solid rgba(109, 74, 255, 0.28);
+  outline-offset: 2px;
+}
+
+.stu-close-button {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 1;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0 !important;
+}
+
+.stu-close-button svg {
+  display: block;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
 .maplibregl-map {
   font-size: 0.75rem !important;
 }

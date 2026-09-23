@@ -1,6 +1,6 @@
 /* oxlint-disable react/set-state-in-effect -- effects synchronize state with the administration API */
 import { useCallback, useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { useAccessibleDialog } from '@stu/shared'
+import { CloseIcon, useAccessibleDialog } from '@stu/shared'
 import { adminApi, type AuditItem, type BackupRunItem, type BackupSettingsItem, type HealthUnitItem, type PermissionItem, type RoleItem, type UserItem } from './adminApi'
 
 type ManagementProps = { onChanged: () => void }
@@ -320,7 +320,7 @@ function ManagementLayout({ kicker, title, description, action, children }: { ki
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const titleId = useId()
   const dialogRef = useAccessibleDialog<HTMLElement>(true, onClose)
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}><section aria-labelledby={titleId} aria-modal="true" className="management-modal" ref={dialogRef} role="dialog" tabIndex={-1}><header><h2 id={titleId}>{title}</h2><button aria-label="Fechar janela" onClick={onClose} type="button">×</button></header>{children}</section></div>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}><section aria-labelledby={titleId} aria-modal="true" className="management-modal" ref={dialogRef} role="dialog" tabIndex={-1}><header><h2 id={titleId}>{title}</h2><button aria-label="Fechar janela" className="stu-close-button" onClick={onClose} type="button"><CloseIcon /></button></header>{children}</section></div>
 }
 
 function CredentialsModal({ userName, password, onClose }: { userName: string; password: string; onClose: () => void }) {

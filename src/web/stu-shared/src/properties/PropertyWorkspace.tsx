@@ -17,6 +17,7 @@ import "./workflow.css";
 import "./properties-refinement.css";
 import { useAddressSuggestion } from './useAddressSuggestion';
 import './address-suggestion.css';
+import { CloseIcon } from "../components/CloseIcon";
 import { useUiActions, useUnsavedChanges, useSessionPreferences } from "../interaction/InteractionProvider";
 import type { Session } from "../auth/types";
 import { useAccessibleDialog } from "../accessibility/useAccessibleDialog";
@@ -423,8 +424,8 @@ export function PropertyWorkspace({
       {error && (
         <div className="property-message property-error" role="alert">
           {error}
-          <button aria-label="Dispensar erro" onClick={() => setError(null)} type="button">
-            ×
+          <button aria-label="Dispensar erro" className="stu-close-button" onClick={() => setError(null)} type="button">
+            <CloseIcon />
           </button>
         </div>
       )}
@@ -437,10 +438,11 @@ export function PropertyWorkspace({
           {notice}
           <button
             aria-label="Dispensar aviso"
+            className="stu-close-button"
             onClick={() => setNotice(null)}
             type="button"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
       )}
@@ -871,10 +873,11 @@ function PropertyEditor({
           </div>
           <button
             aria-label="Fechar cadastro de imóvel"
+            className="stu-close-button"
             onClick={requestClose}
             type="button"
           >
-            ×
+            <CloseIcon />
           </button>
         </header>
         {reference.microregions.length === 0 ? (
@@ -1148,10 +1151,11 @@ function VisitEditor({
           </div>
           <button
             aria-label="Fechar registro de visita"
+            className="stu-close-button"
             onClick={requestClose}
             type="button"
           >
-            ×
+            <CloseIcon />
           </button>
         </header>
         <div className="property-form-grid">

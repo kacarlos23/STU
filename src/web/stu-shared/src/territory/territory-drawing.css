@@ -7,7 +7,7 @@
 
 .territory-editor {
   box-shadow: 0 1.25rem 4rem rgba(20, 42, 36, 0.28);
-  max-width: 430px;
+  max-width: 475px;
   pointer-events: auto;
 }
 
@@ -195,15 +195,16 @@
   background: #fff;
   border: 1px solid #DDD8E5;
   border-radius: 0.65rem;
+  box-sizing: border-box;
   box-shadow: 0 0.8rem 2rem rgba(20, 42, 36, 0.18);
   display: grid;
   gap: 0.42rem;
-  grid-template-columns: repeat(3, 1.8rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   left: 0;
-  padding: 0.55rem;
+  padding: 0.65rem;
   position: absolute;
   top: calc(100% + 0.3rem);
-  width: max-content;
+  width: 9rem;
   z-index: 8;
 }
 
@@ -212,6 +213,7 @@
   border-radius: 0.45rem;
   box-shadow: 0 0 0 1px rgba(20, 42, 36, 0.2);
   height: 1.8rem;
+  justify-self: center;
   min-height: 0;
   padding: 0;
   width: 1.8rem;
@@ -226,11 +228,12 @@
   border-top: 1px solid #E4DFE9;
   cursor: pointer;
   display: grid;
-  gap: 0.6rem;
+  gap: 0.4rem;
   grid-column: 1 / -1;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) 2rem;
   margin-top: 0.15rem;
   padding-top: 0.55rem;
+  width: 100%;
 }
 
 .territory-custom-color span {
@@ -244,10 +247,45 @@
   border: 0;
   border-radius: 0.4rem;
   cursor: pointer;
-  height: 2rem;
-  min-height: 2rem;
+  height: 1.8rem;
+  min-height: 1.8rem;
+  overflow: hidden;
   padding: 0;
-  width: 2.5rem;
+  width: 2rem;
+}
+
+.territory-custom-color input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0.12rem;
+}
+
+.territory-custom-color input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0.3rem;
+}
+
+.territory-compare-button {
+  align-items: center;
+  background: #F4F1FF;
+  border: 1px solid #CFC8D8;
+  border-radius: 0.55rem;
+  color: #6D4AFF;
+  display: flex;
+  font-weight: 600 !important;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.8rem;
+  width: 100%;
+}
+
+.territory-compare-button:hover {
+  background: #EEE9FF;
+  border-color: #A98BFF;
+  color: #4F2C73;
+}
+
+.territory-compare-button:focus-visible {
+  outline: 3px solid rgba(109, 74, 255, 0.24);
+  outline-offset: 2px;
 }
 
 @media (max-width: 900px) {

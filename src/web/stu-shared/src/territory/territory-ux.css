@@ -3,18 +3,19 @@
   border: 1px solid #DDD8E5;
   border-radius: .7rem;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   overflow: hidden;
 }
 
-.territory-editor-progress > div { align-items: center; display: grid; gap: .35rem; grid-template-columns: 1.5rem 1fr; min-width: 0; padding: .55rem .45rem; }
+.territory-editor-progress--four { grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr)); }
+.territory-editor-progress--three { grid-template-columns: repeat(3, 1fr); }
+.territory-editor-progress > div { align-items: center; display: grid; gap: .42rem; grid-template-columns: 1.5rem 1fr; min-width: 0; padding: .65rem .5rem; }
 .territory-editor-progress > div + div { border-left: 1px solid #DDD8E5; }
 .territory-editor-progress i { align-items: center; background: #E9E5ED; border-radius: 50%; color: #746B7E; display: flex; font-size: .54rem; font-style: normal; font-weight: 850; height: 1.4rem; justify-content: center; width: 1.4rem; }
-.territory-editor-progress span { display: grid; min-width: 0; }
-.territory-editor-progress strong { font-size: .54rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.territory-editor-progress small { color: #746B7E; font-size: .47rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.territory-editor-progress strong { color: #51465D; font-size: .62rem; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.territory-editor-progress > div:first-child strong { text-overflow: clip; }
 .territory-editor-progress .active { background: #F2EEFF; }
 .territory-editor-progress .active i { background: #6D4AFF; color: #fff; }
+.territory-editor-progress .active strong { color: #6D4AFF; }
 .territory-editor-progress .complete i { background: #d8eee6; color: #6D4AFF; }
 
 .territory-draft-status { background: #F4F1FF; border-radius: .55rem; color: #5F556A; font-size: .56rem; margin: -.15rem 0 0; padding: .55rem .65rem; }
