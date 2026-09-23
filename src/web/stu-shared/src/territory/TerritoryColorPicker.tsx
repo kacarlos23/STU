@@ -7,9 +7,6 @@ export const territoryColorOptions = [
   "#7C5AC7",
   "#4F2C73",
   "#8B6FD6",
-  "#B96CB0",
-  "#5C3BB8",
-  "#3A245A",
 ] as const;
 
 export function TerritoryColorPicker({
@@ -62,6 +59,15 @@ export function TerritoryColorPicker({
               type="button"
             />
           ))}
+          <label className="territory-custom-color">
+            <span>Cor personalizada</span>
+            <input
+              aria-label="Escolher uma cor personalizada"
+              onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
+              type="color"
+              value={value}
+            />
+          </label>
         </div>
       )}
     </div>

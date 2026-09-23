@@ -361,7 +361,7 @@ export function TerritoryWorkspace({
           "symbol-placement": "point",
           "text-field": ["coalesce", ["get", "code"], ["get", "name"]],
           "text-font": ["Noto Sans Regular"],
-          "text-size": 11,
+          "text-size": 11.55,
           "text-allow-overlap": false,
         },
         paint: {
@@ -425,7 +425,7 @@ export function TerritoryWorkspace({
             ["get", "familyNumber"],
           ],
           "text-font": ["Noto Sans Regular"],
-          "text-size": 11,
+          "text-size": 11.55,
           "text-offset": [0, 1.25],
           "text-anchor": "top",
           "text-allow-overlap": false,
@@ -482,7 +482,7 @@ export function TerritoryWorkspace({
         layout: {
           "text-field": ["to-string", ["get", "vertex"]],
           "text-font": ["Noto Sans Regular"],
-          "text-size": 10,
+          "text-size": 10.5,
           "text-allow-overlap": true,
         },
         paint: { "text-color": "#fff" },

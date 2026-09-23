@@ -221,6 +221,35 @@
   box-shadow: 0 0 0 3px #261F32;
 }
 
+.territory-custom-color {
+  align-items: center;
+  border-top: 1px solid #E4DFE9;
+  cursor: pointer;
+  display: grid;
+  gap: 0.6rem;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr auto;
+  margin-top: 0.15rem;
+  padding-top: 0.55rem;
+}
+
+.territory-custom-color span {
+  color: #51465D;
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.territory-custom-color input[type="color"] {
+  background: transparent;
+  border: 0;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  width: 2.5rem;
+}
+
 @media (max-width: 900px) {
   .territory-editor-backdrop {
     align-items: flex-end;

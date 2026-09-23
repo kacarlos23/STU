@@ -30,4 +30,17 @@ describe("seletor de cor territorial", () => {
     expect(onChange).toHaveBeenCalledWith("#A98BFF");
     expect(screen.queryByRole("group", { name: "Cores disponíveis" })).toBeNull();
   });
+
+  it("mantém seis cores predefinidas e permite escolher qualquer cor", () => {
+    const onChange = vi.fn();
+    render(<TerritoryColorPicker onChange={onChange} value="#6D4AFF" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Escolher cor da área/i }));
+
+    expect(screen.getAllByRole("button", { name: /Usar cor #/i })).toHaveLength(6);
+    fireEvent.change(screen.getByLabelText("Escolher uma cor personalizada"), {
+      target: { value: "#12ab34" },
+    });
+    expect(onChange).toHaveBeenCalledWith("#12AB34");
+  });
 });

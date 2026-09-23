@@ -87,7 +87,7 @@
 }
 
 .stu-auth-story h1 {
-  font-size: clamp(2.8rem, 5.4vw, 5.6rem);
+  font-size: clamp(2.8rem, 5.67vw, 5.6rem);
   letter-spacing: -0.065em;
   line-height: 0.94;
   margin: 0 0 1.5rem;
@@ -144,7 +144,7 @@
 .stu-auth-card h1,
 .stu-auth-card h2 {
   color: var(--auth-ink);
-  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-size: clamp(2rem, 4.2vw, 2.75rem);
   letter-spacing: -0.045em;
   line-height: 1.02;
   margin: 0 0 0.8rem;
