@@ -1,6 +1,6 @@
 # Implantação do modelo de famílias
 
-Preparado em 24/09/2026. Este procedimento **não foi executado em produção**. A implementação está no checkout local e a limpeza foi ensaiada somente em PostgreSQL/PostGIS descartável.
+Preparado em 24/09/2026 e executado em produção na mesma data. A implementação publicada corresponde ao commit `1cb2619deeeb093466ec9fc756e6bfe256e15170`.
 
 O item 15.12 do [plano aprovado](IMPLEMENTATION.md) exige aprovação explícita antes da publicação e da reinicialização real. O funcionamento local e os testes não substituem o aceite operacional do piloto.
 
@@ -45,3 +45,18 @@ A ferramenta valida as confirmações, grava o manifesto, habilita a autorizaç�
 - Reexecutar a pré-implantação e obter nova decisão de liberação do piloto. Aprovações antigas permanecem como histórico, mas não liberam o estado novo.
 
 Se a migração falhar, a transação não é confirmada e os arquivos não são apagados. Se a limpeza de arquivos ou a conferência falhar **depois** do commit, manter a manutenção: o banco já estará no modelo novo. Usar o manifesto para conferir a limpeza restante; a ferramenta recusa repetir o reset após a migração. Não tentar reverter com `Down`, que é bloqueado; restaurar o backup completo se for necessário voltar ao modelo anterior.
+
+## Registro da implantação em produção
+
+A implantação foi autorizada explicitamente e realizada em janela de manutenção em 24/09/2026. API e worker permaneceram parados desde a prévia definitiva até a conclusão das verificações do banco.
+
+- O backup PostgreSQL em formato customizado foi validado com `pg_restore --list` e SHA-256 `A7726028082D35899015C7CE700D8972F0D0FF5D8BA447B1B043A36D39797A96`.
+- O backup do armazenamento operacional foi reaberto com sucesso e tem SHA-256 `FF1561D22A290165C0025C57A1231C8F0FA11C2BF92B2261470D52862B0429B7`.
+- A prévia confirmou a remoção de 4 imóveis, 4 visitas, 4 versões, 1 trabalho operacional e 1 arquivo CSV. O fingerprint confirmado foi `A7EA8D28804AFA08DA9FCF377851063FF8EFDC720C981002EF1DE9CF84CC7525`.
+- A migração `20260923203301_IndependentFamilies` foi aplicada. Imóveis, visitas, versões, trabalhos operacionais, famílias, vínculos e versões de famílias ficaram inicialmente vazios.
+- Permaneceram 1 UBS, 6 bairros, 8 microrregiões, 14 vínculos territoriais, 3 usuários, 5 perfis e a configuração de backup. Foram adicionadas 6 permissões de família e o evento `Reset|FamiliesReset|independent-families` foi registrado.
+- API, worker, aplicação principal, administração e gateway foram reconstruídos a partir do checkout limpo. Todos permaneceram ativos sem reinicializações após a publicação.
+- Os portais públicos, `/health/live`, `/health/ready` e `/api/auth/csrf` responderam HTTP 200. `/api/families` sem autenticação respondeu HTTP 401, e os chunks públicos do cadastro de famílias responderam HTTP 200.
+- O service worker publicado não contém padrões das APIs privadas de famílias, imóveis ou visitas. As telas públicas principal e administrativa foram conferidas visualmente.
+
+Não foram criados registros sintéticos em produção para testar o fluxo autenticado. O aceite operacional com usuário autorizado e a nova decisão de liberação do piloto devem usar dados reais controlados; a implantação invalidou logicamente as aprovações anteriores, conforme planejado.
