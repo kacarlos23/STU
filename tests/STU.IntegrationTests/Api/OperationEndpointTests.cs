@@ -1,11 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using STU.Application.Security;
 using STU.Domain.HealthUnits;
+using STU.Domain.Operations;
 using STU.Infrastructure.Identity;
 using STU.Infrastructure.Persistence;
 
@@ -44,6 +47,44 @@ public sealed class OperationEndpointTests(StuApiFactory factory)
         using var secondClient = CreateClient(); await LoginAsync(secondClient, secondName, password);
         using var forbidden = await secondClient.GetAsync($"/api/operations/jobs?healthUnitId={firstUnitId}");
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task RetryingImportRequiresPropertyManagementPermission()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        const string password = "Operations!Test123";
+        var userName = $"operacoes.restritas.{suffix}";
+        Guid jobId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StuDbContext>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var roles = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+            var unit = HealthUnit.Create($"OR-{suffix}", "UBS Operações Restritas");
+            db.HealthUnits.Add(unit); await db.SaveChangesAsync();
+
+            var roleName = $"operacoes-restritas-{suffix}";
+            var role = ApplicationRole.CreateCustom(roleName, "Operações restritas", null);
+            Assert.True((await roles.CreateAsync(role)).Succeeded);
+            foreach (var permission in new[] { StuPermissions.TerritoryManage, StuPermissions.FamiliesManage })
+                Assert.True((await roles.AddClaimAsync(role, new Claim(StuClaimTypes.Permission, permission))).Succeeded);
+
+            var user = ApplicationUser.Create(userName, "Operador restrito", unit.Id, mustChangePassword: false);
+            Assert.True((await users.CreateAsync(user, password)).Succeeded);
+            Assert.True((await users.AddToRoleAsync(user, roleName)).Succeeded);
+
+            var job = OperationJob.CreateImport(unit.Id, user.Id, OperationFileFormat.Csv, "synthetic.csv", "synthetic.csv");
+            job.Start(); job.Fail("Falha sintética."); db.OperationJobs.Add(job); await db.SaveChangesAsync(); jobId = job.Id;
+        }
+
+        using var client = CreateClient(); await LoginAsync(client, userName, password);
+        using var retry = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/operations/jobs/{jobId}/retry", null);
+        Assert.Equal(HttpStatusCode.Forbidden, retry.StatusCode);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<StuDbContext>();
+        Assert.Equal(OperationJobStatus.Failed, (await verificationDb.OperationJobs.SingleAsync(job => job.Id == jobId)).Status);
     }
 
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = new Uri("https://localhost"), HandleCookies = true });

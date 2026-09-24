@@ -12,7 +12,8 @@
     "./onboarding": "./src/onboarding/OnboardingWorkspace.tsx",
     "./pilot-release": "./src/pilot-release/PilotReleaseWorkspace.tsx",
     "./health-unit-users": "./src/health-unit-users/HealthUnitUsersWorkspace.tsx",
-    "./notifications": "./src/notifications/NotificationCenter.tsx"
+    "./notifications": "./src/notifications/NotificationCenter.tsx",
+    "./families": "./src/families/FamilyWorkspace.tsx"
   },
   "peerDependencies": {
     "react": "^19.2.8",

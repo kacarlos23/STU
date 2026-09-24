@@ -8,6 +8,8 @@ public static class StuPolicies
     public const string TerritoryManage = "TerritoryManage";
     public const string PropertiesView = "PropertiesView";
     public const string PropertiesManage = "PropertiesManage";
+    public const string FamiliesView = "FamiliesView";
+    public const string FamiliesManage = "FamiliesManage";
     public const string VisitsView = "VisitsView";
     public const string VisitsManage = "VisitsManage";
     public const string ReportsExport = "ReportsExport";

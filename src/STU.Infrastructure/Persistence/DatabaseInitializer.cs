@@ -24,8 +24,8 @@ public static class DatabaseInitializer
             "Gestão da UBS, servidores, território e operação.",
             [
                 StuPermissions.MapView,
-                StuPermissions.PropertiesView,
-                StuPermissions.PropertiesManage,
+                StuPermissions.PropertiesView, StuPermissions.FamiliesView,
+                StuPermissions.PropertiesManage, StuPermissions.FamiliesManage,
                 StuPermissions.VisitsView,
                 StuPermissions.VisitsManage,
                 StuPermissions.TerritoryManage,
@@ -38,8 +38,8 @@ public static class DatabaseInitializer
             "Cadastro de imóveis e registro de visitas na área atribuída.",
             [
                 StuPermissions.MapView,
-                StuPermissions.PropertiesView,
-                StuPermissions.PropertiesManage,
+                StuPermissions.PropertiesView, StuPermissions.FamiliesView,
+                StuPermissions.PropertiesManage, StuPermissions.FamiliesManage,
                 StuPermissions.VisitsView,
                 StuPermissions.VisitsManage,
             ]),
@@ -47,12 +47,12 @@ public static class DatabaseInitializer
             SystemRoles.Receptionist,
             "Recepcionista",
             "Consulta operacional dos imóveis e visitas da UBS.",
-            [StuPermissions.MapView, StuPermissions.PropertiesView, StuPermissions.VisitsView]),
+            [StuPermissions.MapView, StuPermissions.PropertiesView, StuPermissions.FamiliesView, StuPermissions.VisitsView]),
         new(
             SystemRoles.Doctor,
             "Médico",
             "Consulta operacional dos imóveis e histórico de visitas da UBS.",
-            [StuPermissions.MapView, StuPermissions.PropertiesView, StuPermissions.VisitsView]),
+            [StuPermissions.MapView, StuPermissions.PropertiesView, StuPermissions.FamiliesView, StuPermissions.VisitsView]),
     ];
 
     public static async Task InitializeAsync(

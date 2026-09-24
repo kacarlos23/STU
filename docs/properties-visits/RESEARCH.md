@@ -1,32 +1,34 @@
 # Pesquisa — imóveis e visitas
 
+> Atualizado em 24/09/2026: a identidade familiar segue o [modelo independente de famílias](../families/IMPLEMENTATION.md). A publicação desse modelo ainda depende de aprovação.
+
 ## Visão geral
 
-A Fase 4 transforma o território em cadastro operacional: imóveis georreferenciados, identificadores vinculados ao imóvel, tags, visitas estruturadas e alertas de cobertura. Não haverá cadastro de moradores nem informação clínica.
+A Fase 4 transforma o território em cadastro operacional: imóveis georreferenciados, famílias independentes com vínculos residenciais temporários, tags, visitas estruturadas e alertas de cobertura. O cadastro familiar contém somente número e responsável; não inclui membros nem informação clínica.
 
 ## Regras confirmadas
 
 - Todo imóvel pertence a exatamente uma UBS e uma microrregião.
-- Todo imóvel possui número do endereço e exatamente um número de família.
-- O número de família é único dentro da UBS e identifica o imóvel, não uma pessoa ou núcleo familiar.
+- Todo imóvel possui número do endereço e pode ter uma família atualmente vinculada. Imóveis sem família continuam disponíveis.
+- O número da família identifica a entidade `Family` e é único na UBS, inclusive entre arquivadas.
 - Trocas de número, microrregião, posição, situação e tags preservam snapshots anteriores.
 - Imóveis e visitas são arquivados; não há exclusão operacional definitiva.
 - Agentes de saúde editam somente imóveis de microrregiões atribuídas a eles.
 - Gerentes e funções personalizadas autorizadas operam em toda a UBS; recepcionistas e médicos consultam toda a UBS.
 - A visita usa campos estruturados e observação opcional curta, com proibição explícita de dados pessoais e clínicos.
 - Tags são configuradas por gerente e administrador global.
-- Cada microrregião pode definir prazo máximo sem visita. A situação é calculada usando a última visita não arquivada.
+- Cada microrregião pode definir prazo máximo sem visita. A situação é calculada usando a última visita não arquivada da família atualmente vinculada; imóveis sem família ficam fora da cobertura.
 
 ## Abordagem técnica
 
-- `HealthProperty` armazena endereço, número do imóvel, número da família, situação, geometria e token de concorrência.
-- Índice único composto `(HealthUnitId, FamilyNumber)` protege a regra mesmo com requisições concorrentes.
+- `HealthProperty` armazena endereço, número do imóvel, situação, geometria e token de concorrência.
+- `Family` armazena número e responsável; `(HealthUnitId, Number)` é único. `FamilyPropertyLink` mantém o histórico e índices exclusivos dos vínculos atuais.
 - `PropertyVersion` é append-only e registra o snapshot após criação, edição, arquivamento e restauração.
 - `OperationalTag` é escopada à UBS; `PropertyTag` mantém a relação muitos-para-muitos.
-- `PropertyVisit` armazena tipo, resultado, dificuldade de acesso, situação observada, data, agente e nota curta.
+- `PropertyVisit` referencia família e imóvel histórico e armazena tipo, resultado, dificuldade de acesso, situação observada, data, agente e nota curta.
 - `CoverageRule` é única por microrregião e define o número máximo de dias sem visita.
 - Pontos e polígonos usam SRID 4326 e índice GiST. A API valida que a geometria esteja coberta pela microrregião.
-- A camada de imóveis aparece somente em zoom alto e exibe `número do imóvel · F número da família`.
+- A camada de imóveis aparece somente em zoom alto e exibe o número do imóvel e a família atual apenas com `families.view`.
 
 ## Segurança e privacidade
 

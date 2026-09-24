@@ -1,5 +1,7 @@
 # Implementação — imóveis e visitas
 
+> Atualização de 24/09/2026: o cadastro de imóvel não solicita número familiar. Vínculos, visitas e cobertura seguem o [modelo independente de famílias](../families/IMPLEMENTATION.md).
+
 ## Etapa 1 — Persistência e regras
 
 - Entidades de imóvel, versão, visita, tag, vínculo e cobertura.

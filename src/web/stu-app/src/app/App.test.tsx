@@ -38,7 +38,7 @@ describe('Acesso ao STU', () => {
     expect(within(navigation).queryByText('Operação')).not.toBeInTheDocument()
     expect(screen.getByText(/Território,\s*mais saúde\s*para todos\./)).toBeInTheDocument()
     expect(screen.getByText('UBS-PILOTO · Município de Teixeira de Freitas')).toBeInTheDocument()
-    expect(screen.getByRole('searchbox', { name: 'Buscar imóvel, família ou endereço' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar família por número ou responsável' })).toBeInTheDocument()
     const profileMenu = screen.getByLabelText('Menu do usuário')
     fireEvent.click(profileMenu)
     expect(screen.getByRole('menuitem', { name: 'Sair do STU' })).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('Acesso ao STU', () => {
   })
 
   it('unifica imóveis e cobertura mantendo cadastro, histórico e visitas', async () => {
-    const property = { id: 'property-id', healthUnitId: 'unit-id', microregionId: 'micro-id', street: 'Rua de teste', houseNumber: '12', familyNumber: '34', postalCode: null, complement: null, geometry: { type: 'Point', coordinates: [-39.7419, -17.5394] }, registrationStatus: 'Active', situation: 'Occupied', concurrencyToken: 'property-version', archivedAtUtc: null, lastVisitAtUtc: null, coverageStatus: 'neverVisited', tags: [] }
+    const property = { id: 'property-id', healthUnitId: 'unit-id', microregionId: 'micro-id', street: 'Rua de teste', houseNumber: '12', familyNumber: '34', familyId: 'family-id', familyConcurrencyToken: 'family-version', postalCode: null, complement: null, geometry: { type: 'Point', coordinates: [-39.7419, -17.5394] }, registrationStatus: 'Active', situation: 'Occupied', concurrencyToken: 'property-version', archivedAtUtc: null, lastVisitAtUtc: null, coverageStatus: 'neverVisited', tags: [] }
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
       if (path === '/api/auth/me') return Promise.resolve(jsonResponse(managerSession()))
@@ -86,8 +86,8 @@ describe('Acesso ao STU', () => {
     expect(within(nav).getAllByRole('button', { name: 'Cobertura' })).toHaveLength(1)
     expect(within(nav).queryByRole('button', { name: 'Imóveis' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Visitas' })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar imóvel, família ou endereço' }), { target: { value: 'Rua de teste' } })
-    fireEvent.submit(screen.getByRole('form', { name: 'Busca geral' }))
+    fireEvent.click(within(nav).getByRole('button', { name: 'Cobertura' }))
+    fireEvent.change(await screen.findByLabelText('Buscar imóvel'), { target: { value: 'Rua de teste' } })
     expect(await screen.findByText(/Acesso liberado/)).toBeInTheDocument()
     expect(screen.getByDisplayValue('Rua de teste')).toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Busca geral' })).not.toBeInTheDocument()
@@ -137,8 +137,8 @@ describe('Acesso ao STU', () => {
     render(<App />)
     expect(await screen.findByText('+50% em relação ao mês anterior')).toBeInTheDocument()
     expect(screen.getByText(/Você está sem conexão/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
-    expect(screen.getByText('10 identificações familiares')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Cadastrar família/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByRole('button', { name: /Famílias cadastradas: 10/ })).toBeInTheDocument()
   })
 
   it('abre a cobertura já filtrada ao selecionar um indicador contextual', async () => {
@@ -163,7 +163,7 @@ describe('Acesso ao STU', () => {
 })
 
 function managerSession() {
-  return { id: 'manager-id', userName: 'gerente', displayName: 'Gerente da UBS', mustChangePassword: false, healthUnit: { id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['map.view', 'territory.manage', 'properties.view', 'properties.manage', 'visits.view', 'visits.manage', 'health_unit.users.manage'] }
+  return { id: 'manager-id', userName: 'gerente', displayName: 'Gerente da UBS', mustChangePassword: false, healthUnit: { id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['map.view', 'territory.manage', 'families.view','families.manage','properties.view', 'properties.manage', 'visits.view', 'visits.manage', 'health_unit.users.manage'] }
 }
 
 function jsonResponse(body: unknown) { return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }) }

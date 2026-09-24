@@ -215,6 +215,7 @@ public static class PilotReleaseEndpoints
             .OrderByDescending(item => item.OccurredAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
         if (entry is null || string.IsNullOrWhiteSpace(entry.AfterJson)) return null;
+        if (await db.AuditEntries.AnyAsync(e => e.EntityType == "FamiliesReset" && e.OccurredAtUtc >= entry.OccurredAtUtc, cancellationToken)) return null;
 
         using var document = JsonDocument.Parse(entry.AfterJson);
         var root = document.RootElement;

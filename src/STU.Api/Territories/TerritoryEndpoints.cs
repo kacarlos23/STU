@@ -392,18 +392,18 @@ public static class TerritoryEndpoints
         var rows = await affected.OrderBy(property => property.Street).ThenBy(property => property.HouseNumber).ThenBy(property => property.Id)
             .Take(100).Select(property => new
             {
-                property.Id, property.Street, property.HouseNumber, property.FamilyNumber,
+                property.Id, property.Street, property.HouseNumber,
                 OutsideBoundary = !boundary.Covers(property.Geometry),
             }).ToListAsync();
         return new(count, blocked, rows.Select(property => new AffectedProperty(
-            property.Id, property.Street, property.HouseNumber, property.FamilyNumber,
+            property.Id, property.Street, property.HouseNumber,
             movingUnit ? "Mudança de UBS exige transferência dos vínculos do imóvel." : property.OutsideBoundary
                 ? "Imóvel ficará fora do novo limite." : "Imóvel passará a ser atendido por outro responsável.")).ToArray());
     }
 
     private static string PropertyImpactMessage(int count) => $"{count} imóvel(is) ficariam fora do limite ou com a UBS incompatível. Revise o contorno ou regularize os vínculos dos imóveis antes de salvar. Nenhum imóvel foi transferido automaticamente.";
     private sealed record PropertyImpact(int AffectedCount, int BlockedCount, AffectedProperty[] Properties);
-    private sealed record AffectedProperty(Guid Id, string Street, string HouseNumber, string FamilyNumber, string Reason);
+    private sealed record AffectedProperty(Guid Id, string Street, string HouseNumber, string Reason);
 
     private static bool MatchesNeighborhood(Geometry neighborhood, MultiPolygon boundary)
     {

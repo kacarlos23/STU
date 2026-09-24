@@ -1,3 +1,4 @@
+using STU.Api.Families;
 using System.Threading.RateLimiting;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -79,6 +80,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(StuClaimTypes.MustChangePassword, "false")
             .RequireAssertion(context => HasPermission(context.User, StuPermissions.TerritoryManage)));
+    options.AddPolicy(StuPolicies.FamiliesView, policy => PermissionPolicy(policy, StuPermissions.FamiliesView));
+    options.AddPolicy(StuPolicies.FamiliesManage, policy => PermissionPolicy(policy, StuPermissions.FamiliesManage));
     options.AddPolicy(StuPolicies.PropertiesView, policy => PermissionPolicy(policy, StuPermissions.PropertiesView));
     options.AddPolicy(StuPolicies.PropertiesManage, policy => PermissionPolicy(policy, StuPermissions.PropertiesManage));
     options.AddPolicy(StuPolicies.VisitsView, policy => PermissionPolicy(policy, StuPermissions.VisitsView));
@@ -222,6 +225,7 @@ app.Use(async (context, next) =>
         return;
     }
 
+    if (context.Request.Path.StartsWithSegments("/api")) context.Response.Headers.CacheControl = "no-store, private";
     await next(context);
 });
 
@@ -245,6 +249,7 @@ app.MapDashboardEndpoints();
 app.MapAdministrationEndpoints();
 app.MapTerritoryEndpoints();
 app.MapPropertyEndpoints();
+app.MapFamilyEndpoints();
 app.MapOperationEndpoints();
 app.MapBackupEndpoints();
 app.MapMonitoringEndpoints();

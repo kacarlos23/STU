@@ -1,3 +1,4 @@
+using STU.Domain.Families;
 using System.Data;
 using System.Diagnostics;
 using System.Text.Json;
@@ -122,20 +123,23 @@ public sealed class PilotDatasetService(
                     microregion.Entity.Id,
                     propertySpec.Street,
                     propertySpec.HouseNumber,
-                    propertySpec.FamilyNumber,
                     propertySpec.PostalCode,
                     propertySpec.Index % 12 == 0 ? "Fundos" : null,
                     propertySpec.Geometry,
                     propertySpec.Index % 20 == 0 ? PropertyRegistrationStatus.Draft : PropertyRegistrationStatus.Active,
                     SituationFor(propertySpec.Index));
+                var family = Family.Create(healthUnit.Id, propertySpec.FamilyNumber, $"Responsável sintético {propertySpec.FamilyNumber}", agentId);
+                db.Families.Add(family); db.FamilyVersions.Add(FamilyVersion.Capture(family, 1, "SyntheticSeed", agentId));
                 db.Properties.Add(property);
+                if (property.RegistrationStatus == PropertyRegistrationStatus.Active)
+                    db.FamilyPropertyLinks.Add(FamilyPropertyLink.Create(healthUnit.Id, family.Id, property.Id, agentId));
                 db.PropertyVersions.Add(PropertyVersion.Capture(property, 1, "SyntheticSeed", agentId));
 
-                AddVisit(property, agentId, propertySpec.Index, 0);
+                AddVisit(property, family.Id, agentId, propertySpec.Index, 0);
                 visitCount++;
                 if (propertySpec.Index % 2 == 0)
                 {
-                    AddVisit(property, agentId, propertySpec.Index, 1);
+                    AddVisit(property, family.Id, agentId, propertySpec.Index, 1);
                     visitCount++;
                 }
 
@@ -199,11 +203,12 @@ public sealed class PilotDatasetService(
 
         return manifest;
 
-        void AddVisit(HealthProperty property, Guid agentId, int propertyIndex, int sequence)
+        void AddVisit(HealthProperty property, Guid familyId, Guid agentId, int propertyIndex, int sequence)
         {
+            if (property.RegistrationStatus != PropertyRegistrationStatus.Active) return;
             var observedSituation = SituationFor(propertyIndex + sequence);
             var visit = PropertyVisit.Create(
-                property.Id,
+                familyId, property.Id,
                 healthUnit.Id,
                 agentId,
                 PilotDatasetBlueprint.ReferenceDate.AddDays(-((propertyIndex * 3 + sequence * 17) % 120)),
@@ -241,6 +246,9 @@ public sealed class PilotDatasetService(
                 audit_entries,
                 operation_jobs,
                 user_notifications,
+                family_property_links,
+                family_versions,
+                families,
                 property_tags,
                 property_visits,
                 property_versions,

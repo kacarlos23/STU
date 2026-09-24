@@ -43,19 +43,22 @@ type Microregion = {
   assignedAgentId: string | null;
   boundary: Geometry;
 };
-type ReferenceData = {
+export type ReferenceData = {
   selectedHealthUnitId: string;
   microregions: Microregion[];
   tags: Tag[];
   coverageRules: { microregionId: string; maxDaysWithoutVisit: number }[];
 };
-type PropertyItem = {
+export type PropertyItem = {
   id: string;
   healthUnitId: string;
   microregionId: string;
   street: string;
   houseNumber: string;
-  familyNumber: string;
+  familyNumber: string | null;
+  familyId?: string | null;
+  familyResponsibleName?: string | null;
+  familyConcurrencyToken?: string | null;
   postalCode: string | null;
   complement: string | null;
   geometry: Geometry;
@@ -67,8 +70,12 @@ type PropertyItem = {
   coverageStatus: string;
   tags: Tag[];
 };
-type Visit = {
+export type Visit = {
   id: string;
+  familyId: string;
+  propertyId: string;
+  street?: string;
+  houseNumber?: string;
   visitedAtUtc: string;
   type: string;
   outcome: string;
@@ -84,7 +91,6 @@ type Version = {
   changeKind: string;
   changedAtUtc: string;
   houseNumber: string;
-  familyNumber: string;
 };
 type Unit = { id: string; code: string; name: string };
 type View = "properties" | "settings";
@@ -134,6 +140,7 @@ export function PropertyWorkspace({
   const [properties, setProperties] = useState<PropertyItem[]>([]);
   const [selectedId, setSelectedId] = useState(preferences.selectedId);
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [occupancy, setOccupancy] = useState<{id:string;number:string;responsibleName:string;startedAtUtc:string;endedAtUtc:string|null}[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
   const [query, setQuery] = useState(preferences.query);
   const [queryInput, setQueryInput] = useState(preferences.query);
@@ -150,10 +157,9 @@ export function PropertyWorkspace({
     global ||
     session.permissions.includes("*") ||
     session.permissions.includes("properties.manage");
-  const canManageVisits =
-    global ||
-    session.permissions.includes("*") ||
-    session.permissions.includes("visits.manage");
+  const canViewFamilies = global || session.permissions.includes("*") || session.permissions.includes("families.view");
+  const canViewVisits = canViewFamilies && (global || session.permissions.includes("*") || session.permissions.includes("visits.view"));
+  const canManageVisits = canViewFamilies && (global || session.permissions.includes("*") || session.permissions.includes("visits.manage"));
   const canManageSettings =
     global ||
     session.permissions.includes("*") ||
@@ -279,20 +285,22 @@ export function PropertyWorkspace({
       return;
     }
     Promise.all([
-      fetch(`/api/properties/${selectedId}/visits`, { credentials: "include" }),
+      canViewVisits ? fetch(`/api/properties/${selectedId}/visits`, { credentials: "include" }) : Promise.resolve(Response.json([])),
       fetch(`/api/properties/${selectedId}/versions`, {
         credentials: "include",
       }),
+      canViewFamilies ? fetch(`/api/properties/${selectedId}/families`, { credentials: "include" }) : Promise.resolve(Response.json([])),
     ])
-      .then(async ([visitResponse, versionResponse]) => {
+      .then(async ([visitResponse, versionResponse, occupancyResponse]) => {
         if (!visitResponse.ok || !versionResponse.ok) throw new Error();
         const visitData = (await visitResponse.json()) as Visit[];
         const versionData = (await versionResponse.json()) as Version[];
-        if (active) { setVisits(visitData); setVersions(versionData); }
+        const occupancyData = occupancyResponse.ok ? await occupancyResponse.json() as typeof occupancy : [];
+        if (active) { setVisits(visitData); setVersions(versionData); setOccupancy(occupancyData); }
       })
       .catch(() => { if (active) setError("Não foi possível carregar o histórico do imóvel."); });
     return () => { active = false; };
-  }, [selectedId]);
+  }, [selectedId, canViewVisits, canViewFamilies]);
 
   const filtered = properties;
   const selected = properties.find((item) => item.id === selectedId) ?? null;
@@ -314,7 +322,7 @@ export function PropertyWorkspace({
     const consequence = item.archivedAtUtc
       ? "O imóvel voltará às listas ativas e poderá gerar alertas de cobertura."
       : "O imóvel sairá das listas ativas e deixará de gerar alertas de cobertura.";
-    if (!await confirm({ title: `${item.archivedAtUtc ? "Reativar" : "Arquivar"} imóvel?`, message: `Imóvel ${item.houseNumber}, família ${item.familyNumber}. ${consequence} ${visitImpact}`, confirmLabel: item.archivedAtUtc ? "Reativar" : "Arquivar" }))
+    if (!await confirm({ title: `${item.archivedAtUtc ? "Reativar" : "Arquivar"} imóvel?`, message: `Imóvel ${item.houseNumber}. ${consequence} ${visitImpact}`, confirmLabel: item.archivedAtUtc ? "Reativar" : "Arquivar" }))
       return;
     try {
       setLoading(true);
@@ -335,8 +343,8 @@ export function PropertyWorkspace({
     if (!await confirm({ title: `${visit.archivedAtUtc ? "Reativar" : "Arquivar"} visita?`, message: "O registro continuará disponível no histórico do imóvel.", confirmLabel: visit.archivedAtUtc ? "Reativar" : "Arquivar" })) return;
     try {
       await mutate(
-        `/api/properties/${selectedId}/visits/${visit.id}/${visit.archivedAtUtc ? "restore" : "archive"}`,
-        "POST",
+        `/api/families/${visit.familyId}/visits/${visit.id}/${visit.archivedAtUtc ? "restore" : "archive"}`,
+        "POST", { expectedVersion: visit.concurrencyToken },
       );
       const response = await fetch(`/api/properties/${selectedId}/visits`, {
         credentials: "include",
@@ -362,8 +370,7 @@ export function PropertyWorkspace({
                 : "Imóveis e cobertura"}
           </h2>
           <p>
-            Somente dados do imóvel e da operação — sem moradores ou informações
-            clínicas.
+            Endereços, vínculos familiares autorizados e acompanhamento territorial.
           </p>
         </div>
         <div className="property-actions">
@@ -502,7 +509,7 @@ export function PropertyWorkspace({
                       {item.street}, {item.houseNumber}
                     </strong>
                     <small>
-                      Família {item.familyNumber} ·{" "}
+                      {item.familyNumber ? `Família ${item.familyNumber}` : "Sem família"} ·{" "}
                       {microName(reference, item.microregionId)}
                     </small>
                     <em>
@@ -531,7 +538,7 @@ export function PropertyWorkspace({
                         {selected.street}, {selected.houseNumber}
                       </h3>
                       <p>
-                        Família <strong>{selected.familyNumber}</strong> ·{" "}
+                        {selected.familyNumber ? <>Família <strong>{selected.familyNumber}</strong> · {selected.familyResponsibleName}</> : "Sem família vinculada"} ·{" "}
                         {microName(reference, selected.microregionId)}
                       </p>
                     </div>
@@ -557,7 +564,7 @@ export function PropertyWorkspace({
                   </header>
                   <section className="property-last-visit" aria-label="Última visita do imóvel">
                     <div><span>Última visita</span><strong>{selected.lastVisitAtUtc ? new Date(selected.lastVisitAtUtc).toLocaleString("pt-BR") : "Nenhuma visita registrada"}</strong><small>{translateCoverage(selected.coverageStatus)}</small></div>
-                    {canManageVisits && !selected.archivedAtUtc && <button className="property-primary" type="button" onClick={() => setVisitEditor("new")}>Registrar visita</button>}
+                    {canManageVisits && selected.familyId && !selected.archivedAtUtc && <button className="property-primary" type="button" onClick={() => setVisitEditor("new")}>Registrar visita</button>}
                   </section>
                   <div className="property-facts">
                     <span>
@@ -660,7 +667,7 @@ export function PropertyWorkspace({
                     {versions.map((version) => (
                       <p key={version.versionNumber}>
                         <b>v{version.versionNumber}</b> Casa{" "}
-                        {version.houseNumber} · Família {version.familyNumber}
+                        {version.houseNumber}
                         <small>
                           {translateChange(version.changeKind)} em{" "}
                           {new Date(version.changedAtUtc).toLocaleString(
@@ -705,6 +712,7 @@ export function PropertyWorkspace({
           )}
         </>
       )}
+      {selected && canViewFamilies && <section className="property-history" aria-label="Histórico de famílias do imóvel"><h3>Famílias que ocuparam este imóvel</h3>{occupancy.length ? occupancy.map(link => <p key={link.id}><strong>Família {link.number}</strong> · {link.responsibleName} — {new Date(link.startedAtUtc).toLocaleDateString('pt-BR')} até {link.endedAtUtc ? new Date(link.endedAtUtc).toLocaleDateString('pt-BR') : 'atualmente'}</p>) : <p>Nenhuma família vinculada a este imóvel.</p>}</section>}
       {editing && reference && (
         <PropertyEditor
           item={editing}
@@ -741,7 +749,7 @@ export function PropertyWorkspace({
   );
 }
 
-function PropertyEditor({
+export function PropertyEditor({
   item,
   reference,
   onCancel,
@@ -823,7 +831,6 @@ function PropertyEditor({
       microregionId: String(fields.get("microregionId")),
       street: String(fields.get("street")),
       houseNumber: String(fields.get("houseNumber")),
-      familyNumber: String(fields.get("familyNumber")),
       postalCode: String(fields.get("postalCode")) || null,
       complement: String(fields.get("complement")) || null,
       geometry: { type: "Point", coordinates: point },
@@ -869,7 +876,7 @@ function PropertyEditor({
         <header>
           <div>
             <span>{editing ? "Editar e versionar" : "Novo cadastro"}</span>
-            <h3 id={titleId}>Imóvel e número de família</h3>
+            <h3 id={titleId}>Cadastro do imóvel</h3>
           </div>
           <button
             aria-label="Fechar cadastro de imóvel"
@@ -921,15 +928,6 @@ function PropertyEditor({
                   defaultValue={editing?.houseNumber}
                   maxLength={32}
                   name="houseNumber"
-                  required
-                />
-              </label>
-              <label>
-                Número da família
-                <input
-                  defaultValue={editing?.familyNumber}
-                  maxLength={32}
-                  name="familyNumber"
                   required
                 />
               </label>
@@ -1013,7 +1011,7 @@ function PropertyEditor({
             </div>
             <section className="property-address-suggestion" aria-label="Endereço sugerido pelo mapa">
               <label><input type="checkbox" checked={addressEnabled} onChange={event => setAddressEnabled(event.target.checked)} /> Buscar endereço ao marcar no mapa</label>
-              <p>A consulta envia somente as coordenadas ao provedor. Número da casa e da família continuam manuais. Bairros e microrregiões seguem os limites do STU.</p>
+              <p>A consulta envia somente as coordenadas ao provedor. O número da casa continua manual. Bairros e microrregiões seguem os limites do STU.</p>
               <p>Endereços: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noreferrer">Regras de uso do Nominatim</a>.</p>
               {address.status && <p role="status" aria-live="polite">{address.status}</p>}
               {address.result?.found && <div><p><strong>Logradouro:</strong> {address.result.street || 'Não encontrado'}<br /><strong>CEP:</strong> {address.result.postalCode || 'Não encontrado'}</p><button type="button" disabled={saving} onClick={() => void applyAddress()}>Usar endereço sugerido</button></div>}
@@ -1066,14 +1064,14 @@ function PropertyEditor({
   );
 }
 
-function VisitEditor({
+export function VisitEditor({
   property,
   item,
   onCancel,
   onSaved,
   setError,
 }: {
-  property: PropertyItem;
+  property: Pick<PropertyItem, "id" | "houseNumber" | "familyNumber" | "familyId" | "familyConcurrencyToken" | "situation">;
   item: Visit | "new";
   onCancel: () => void;
   onSaved: () => Promise<void>;
@@ -1096,8 +1094,8 @@ function VisitEditor({
     try {
       await mutate(
         editing
-          ? `/api/properties/${property.id}/visits/${editing.id}`
-          : `/api/properties/${property.id}/visits`,
+          ? `/api/families/${editing.familyId ?? property.familyId}/visits/${editing.id}`
+          : `/api/families/${property.familyId}/visits`,
         editing ? "PUT" : "POST",
         {
           visitedAtUtc: new Date(String(fields.get("visitedAt"))).toISOString(),
@@ -1107,6 +1105,7 @@ function VisitEditor({
           accessDifficulty: fields.get("accessDifficulty") === "on",
           note: String(fields.get("note")) || null,
           expectedVersion: editing?.concurrencyToken ?? null,
+          expectedFamilyVersion: property.familyConcurrencyToken,
         },
       );
       await onSaved();
@@ -1606,6 +1605,8 @@ function translateCoverage(value: string) {
       {
         overdue: "Fora do prazo",
         neverVisited: "Nunca visitado",
+    noFamily: "Sem família",
+    restricted: "Acesso restrito",
         covered: "Em dia",
         notConfigured: "Sem prazo configurado",
       } as Record<string, string>
@@ -1653,7 +1654,7 @@ function translateChange(value: string) {
 function messageOf(value: unknown, fallback: string) {
   return value instanceof Error ? value.message : fallback;
 }
-async function mutate(path: string, method: "POST" | "PUT", body?: unknown) {
+export async function mutate(path: string, method: "POST" | "PUT", body?: unknown) {
   if (!navigator.onLine)
     throw new Error("Sem conexão. Reconecte-se antes de salvar imóveis ou visitas.");
   const csrf = await fetch("/api/auth/csrf", { credentials: "include" });

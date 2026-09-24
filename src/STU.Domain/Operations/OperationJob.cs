@@ -29,6 +29,8 @@ public sealed class OperationJob : Entity
     public string? ResultFileName { get; private set; }
     public string? ErrorSummary { get; private set; }
     public int RecordCount { get; private set; }
+    public int FamilyCount { get; private set; }
+    public int LinkCount { get; private set; }
     public int ValidationErrorCount { get; private set; }
     public int AttemptCount { get; private set; }
     public int ProgressPercentage { get; private set; }
@@ -50,10 +52,10 @@ public sealed class OperationJob : Entity
         Status = OperationJobStatus.Processing; StartedAtUtc = DateTimeOffset.UtcNow; AttemptCount++; ProgressPercentage = 5; Touch();
     }
 
-    public void AwaitApproval(string stagedFileName, int recordCount)
+    public void AwaitApproval(string stagedFileName, int recordCount, int familyCount = 0, int linkCount = 0)
     {
         if (Status != OperationJobStatus.Processing) throw new InvalidOperationException("O trabalho não está em processamento.");
-        StagedFileName = stagedFileName; RecordCount = recordCount; ValidationErrorCount = 0; ErrorSummary = null;
+        StagedFileName = stagedFileName; RecordCount = recordCount; FamilyCount = familyCount; LinkCount = linkCount; ValidationErrorCount = 0; ErrorSummary = null;
         Status = OperationJobStatus.AwaitingApproval; ProgressPercentage = 50; Touch();
     }
 

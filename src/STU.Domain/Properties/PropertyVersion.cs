@@ -12,7 +12,6 @@ public sealed class PropertyVersion
     public Guid MicroregionId { get; private init; }
     public string Street { get; private init; } = string.Empty;
     public string HouseNumber { get; private init; } = string.Empty;
-    public string FamilyNumber { get; private init; } = string.Empty;
     public string? PostalCode { get; private init; }
     public string? Complement { get; private init; }
     public Geometry Geometry { get; private init; } = default!;
@@ -26,7 +25,7 @@ public sealed class PropertyVersion
     public static PropertyVersion Capture(HealthProperty item, int number, string kind, Guid actorId) => new()
     {
         PropertyId=item.Id,VersionNumber=number,HealthUnitId=item.HealthUnitId,MicroregionId=item.MicroregionId,Street=item.Street,
-        HouseNumber=item.HouseNumber,FamilyNumber=item.FamilyNumber,PostalCode=item.PostalCode,Complement=item.Complement,
+        HouseNumber=item.HouseNumber,PostalCode=item.PostalCode,Complement=item.Complement,
         Geometry=(Geometry)item.Geometry.Copy(),RegistrationStatus=item.RegistrationStatus,Situation=item.Situation,IsArchived=item.IsArchived,
         ChangeKind=kind,ChangedByUserId=actorId,
     };

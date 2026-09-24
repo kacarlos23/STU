@@ -7,6 +7,7 @@ using STU.Domain.Auditing;
 using STU.Domain.Territories;
 using STU.Domain.Properties;
 using STU.Domain.Operations;
+using STU.Domain.Families;
 using STU.Infrastructure.Identity;
 
 namespace STU.Infrastructure.Persistence;
@@ -29,6 +30,9 @@ public sealed class StuDbContext(DbContextOptions<StuDbContext> options)
     public DbSet<MicroregionVersion> MicroregionVersions => Set<MicroregionVersion>();
 
     public DbSet<HealthProperty> Properties => Set<HealthProperty>();
+    public DbSet<Family> Families => Set<Family>();
+    public DbSet<FamilyVersion> FamilyVersions => Set<FamilyVersion>();
+    public DbSet<FamilyPropertyLink> FamilyPropertyLinks => Set<FamilyPropertyLink>();
     public DbSet<PropertyVersion> PropertyVersions => Set<PropertyVersion>();
     public DbSet<PropertyVisit> PropertyVisits => Set<PropertyVisit>();
     public DbSet<OperationalTag> OperationalTags => Set<OperationalTag>();

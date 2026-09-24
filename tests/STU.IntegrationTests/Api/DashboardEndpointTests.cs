@@ -1,3 +1,4 @@
+using STU.Domain.Families;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -49,15 +50,20 @@ public sealed class DashboardEndpointTests(StuApiFactory factory)
             db.Microregions.AddRange(firstMicroregion, unassigned, otherMicroregion);
             await db.SaveChangesAsync();
 
-            var property = HealthProperty.Create(first.Id, firstMicroregion.Id, "Rua do Painel", "10", "F-10", null, null, GeometryFactory.CreatePoint(new Coordinate(-46.5, -23.5)), PropertyRegistrationStatus.Active, PropertySituation.Occupied);
-            var otherProperty = HealthProperty.Create(second.Id, otherMicroregion.Id, "Rua Externa", "20", "F-20", null, null, GeometryFactory.CreatePoint(new Coordinate(-42.5, -23.5)), PropertyRegistrationStatus.Active, PropertySituation.Occupied);
+            var property = HealthProperty.Create(first.Id, firstMicroregion.Id, "Rua do Painel", "10", null, null, GeometryFactory.CreatePoint(new Coordinate(-46.5, -23.5)), PropertyRegistrationStatus.Active, PropertySituation.Occupied);
+            var otherProperty = HealthProperty.Create(second.Id, otherMicroregion.Id, "Rua Externa", "20", null, null, GeometryFactory.CreatePoint(new Coordinate(-42.5, -23.5)), PropertyRegistrationStatus.Active, PropertySituation.Occupied);
             db.Properties.AddRange(property, otherProperty);
             db.CoverageRules.Add(CoverageRule.Create(first.Id, firstMicroregion.Id, 60));
             var monthStart = new DateTimeOffset(DateTimeOffset.UtcNow.Year, DateTimeOffset.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero);
+            var family = Family.Create(first.Id, "F-10", "Responsável sintético A", manager.Id);
+            var otherFamily = Family.Create(second.Id, "F-20", "Responsável sintético B", manager.Id);
+            db.Families.AddRange(family, otherFamily);
+            db.FamilyPropertyLinks.AddRange(FamilyPropertyLink.Create(first.Id, family.Id, property.Id, manager.Id), FamilyPropertyLink.Create(second.Id, otherFamily.Id, otherProperty.Id, manager.Id));
+            await db.SaveChangesAsync();
             db.PropertyVisits.AddRange(
-                PropertyVisit.Create(property.Id, first.Id, manager.Id, monthStart.AddDays(1), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null),
-                PropertyVisit.Create(property.Id, first.Id, manager.Id, monthStart.AddMonths(-1).AddDays(1), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null),
-                PropertyVisit.Create(otherProperty.Id, second.Id, manager.Id, monthStart.AddDays(2), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null));
+                PropertyVisit.Create(family.Id, property.Id, first.Id, manager.Id, monthStart.AddDays(1), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null),
+                PropertyVisit.Create(family.Id, property.Id, first.Id, manager.Id, monthStart.AddMonths(-1).AddDays(1), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null),
+                PropertyVisit.Create(otherFamily.Id, otherProperty.Id, second.Id, manager.Id, monthStart.AddDays(2), VisitType.Routine, VisitOutcome.Completed, PropertySituation.Occupied, false, null));
             await db.SaveChangesAsync();
         }
 

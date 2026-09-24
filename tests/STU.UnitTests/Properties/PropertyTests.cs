@@ -12,18 +12,16 @@ public sealed class PropertyTests
     {
         var actorId = Guid.NewGuid();
         var item = HealthProperty.Create(
-            Guid.NewGuid(), Guid.NewGuid(), " Rua das Flores ", " 12-a ", " fam-009 ",
+            Guid.NewGuid(), Guid.NewGuid(), " Rua das Flores ", " 12-a ",
             "12345-000", null, Factory.CreatePoint(new Coordinate(-46.63, -23.55)),
             PropertyRegistrationStatus.Active, PropertySituation.Occupied);
 
         var firstVersion = PropertyVersion.Capture(item, 1, "Create", actorId);
-        item.Update(item.MicroregionId, item.Street, "14", "FAM-010", item.PostalCode, null,
+        item.Update(item.MicroregionId, item.Street, "14", item.PostalCode, null,
             item.Geometry, item.RegistrationStatus, item.Situation);
 
         Assert.Equal("12-A", firstVersion.HouseNumber);
-        Assert.Equal("FAM-009", firstVersion.FamilyNumber);
         Assert.Equal("14", item.HouseNumber);
-        Assert.Equal("FAM-010", item.FamilyNumber);
         Assert.NotSame(firstVersion.Geometry, item.Geometry);
     }
 
@@ -31,7 +29,7 @@ public sealed class PropertyTests
     public void ArchiveIsRecoverableAndChangesConcurrencyToken()
     {
         var item = HealthProperty.Create(
-            Guid.NewGuid(), Guid.NewGuid(), "Rua A", "1", "1", null, null,
+            Guid.NewGuid(), Guid.NewGuid(), "Rua A", "1", null, null,
             Factory.CreatePoint(new Coordinate(-46.63, -23.55)),
             PropertyRegistrationStatus.Draft, PropertySituation.Vacant);
         var token = item.ConcurrencyToken;

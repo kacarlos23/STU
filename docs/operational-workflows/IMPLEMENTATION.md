@@ -31,3 +31,7 @@
 ## Critério de conclusão
 
 Trabalhos são retomáveis e auditados; importações inválidas não alteram dados oficiais; a aprovação insere todo o lote ou nada; downloads respeitam a UBS; notificações são individuais.
+
+## Modelo familiar independente — 24/09/2026
+
+Importações aceitam `familyNumber` e `familyResponsibleName` juntos ou ambos vazios. A prévia separa imóveis, famílias e vínculos. A aprovação cria o lote atomicamente; número já reservado exige vínculo explícito, inclusive se a família estiver arquivada. Exportações identificam separadamente imóvel, família atual e vínculo, com acesso por permissões de imóveis e famílias. Consulte [Famílias](../families/IMPLEMENTATION.md).

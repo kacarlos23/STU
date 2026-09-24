@@ -6,6 +6,8 @@ public static class StuPermissions
     public const string MapView = "map.view";
     public const string PropertiesView = "properties.view";
     public const string PropertiesManage = "properties.manage";
+    public const string FamiliesView = "families.view";
+    public const string FamiliesManage = "families.manage";
     public const string VisitsView = "visits.view";
     public const string VisitsManage = "visits.manage";
     public const string TerritoryManage = "territory.manage";
@@ -18,6 +20,8 @@ public static class StuPermissions
         new(TerritoryManage, "Gerenciar territórios", "Território"),
         new(PropertiesView, "Consultar imóveis", "Imóveis"),
         new(PropertiesManage, "Gerenciar imóveis", "Imóveis"),
+        new(FamiliesView, "Consultar famílias", "Famílias"),
+        new(FamiliesManage, "Gerenciar famílias", "Famílias"),
         new(VisitsView, "Consultar visitas", "Visitas"),
         new(VisitsManage, "Registrar e editar visitas", "Visitas"),
         new(HealthUnitUsersManage, "Gerenciar servidores da UBS", "Gestão"),

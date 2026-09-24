@@ -5,14 +5,14 @@ import { TerritoryImpactPanel } from '../../../../stu-shared/src/territory/Terri
 afterEach(cleanup)
 
 describe('territorial impact review', () => {
-  it('identifies houses and families that prevent saving', () => {
+  it('identifies properties that prevent saving without exposing family data', () => {
     render(<TerritoryImpactPanel impact={{
       valid: false, affectedPropertyCount: 1, blockedPropertyCount: 1,
       conflicts: ['O imóvel ficará fora do limite.'],
       affectedProperties: [{ id: 'p1', street: 'Rua de teste', houseNumber: '20', familyNumber: 'F30', reason: 'Imóvel ficará fora do novo limite.' }],
     }} />)
     expect(screen.getByRole('status').textContent).toContain('Revise os impedimentos')
-    expect(screen.getByText('Rua de teste, nº 20 · Família F30')).toBeTruthy()
+    expect(screen.getByText('Rua de teste, nº 20')).toBeTruthy()
     expect(screen.getByText('O imóvel ficará fora do limite.')).toBeTruthy()
   })
 

@@ -107,7 +107,7 @@ public sealed class TerritorialIntegrityTests(StuApiFactory factory)
         {
             var db = scope.ServiceProvider.GetRequiredService<StuDbContext>();
             var property = (await db.Properties.FindAsync(seed.PropertyId))!;
-            property.Update(property.MicroregionId, property.Street, "11", property.FamilyNumber, null, null, property.Geometry, property.RegistrationStatus, property.Situation);
+            property.Update(property.MicroregionId, property.Street, "11", null, null, property.Geometry, property.RegistrationStatus, property.Situation);
             await db.SaveChangesAsync();
         }
         var after = await client.GetFromJsonAsync<JsonElement>("/api/onboarding/readiness");
@@ -116,7 +116,7 @@ public sealed class TerritorialIntegrityTests(StuApiFactory factory)
     }
 
     [Fact]
-    public async Task PropertyWithoutVisitsHasConsistentNeverVisitedStatusInListMapAndDetail()
+    public async Task PropertyWithoutFamilyIsVisibleButExcludedFromCoverageInListMapAndDetail()
     {
         var seed = await SeedAsync();
         using (var scope = factory.Services.CreateScope())
@@ -128,12 +128,12 @@ public sealed class TerritorialIntegrityTests(StuApiFactory factory)
         using var client = await LoginAsync(seed.UserName);
         var list = await client.GetFromJsonAsync<JsonElement>("/api/properties?page=1&pageSize=20&includeArchived=false");
         var item = Assert.Single(list.GetProperty("items").EnumerateArray());
-        Assert.Equal("neverVisited", item.GetProperty("coverageStatus").GetString());
+        Assert.Equal("noFamily", item.GetProperty("coverageStatus").GetString());
         Assert.Equal(JsonValueKind.Null, item.GetProperty("lastVisitAtUtc").ValueKind);
         var map = await client.GetFromJsonAsync<JsonElement>("/api/properties/map");
-        Assert.Equal("neverVisited", Assert.Single(map.GetProperty("features").EnumerateArray()).GetProperty("properties").GetProperty("coverageStatus").GetString());
+        Assert.Equal("noFamily", Assert.Single(map.GetProperty("features").EnumerateArray()).GetProperty("properties").GetProperty("coverageStatus").GetString());
         var detail = await client.GetFromJsonAsync<JsonElement>($"/api/properties/{seed.PropertyId}");
-        Assert.Equal("neverVisited", detail.GetProperty("coverageStatus").GetString());
+        Assert.Equal("noFamily", detail.GetProperty("coverageStatus").GetString());
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public sealed class TerritorialIntegrityTests(StuApiFactory factory)
         var micro = Microregion.Create($"INT-{suffix}", $"Área {suffix}", unit.Id, null, new MultiPolygon([Polygon(x, 20, x + .9, 20.9)]) { SRID = 4326 }, TerritorySource.Manual);
         var otherMicro = Microregion.Create($"OTH-{suffix}", $"Outra {suffix}", other.Id, null, new MultiPolygon([Polygon(x + 1, 20, x + 1.9, 20.9)]) { SRID = 4326 }, TerritorySource.Manual);
         if (archivedMicroregion) micro.Archive();
-        var property = HealthProperty.Create(unit.Id, micro.Id, "Rua de teste", "10", "F10", null, null, new Point(x + .8, 20.5) { SRID = 4326 }, PropertyRegistrationStatus.Active, PropertySituation.Occupied);
+        var property = HealthProperty.Create(unit.Id, micro.Id, "Rua de teste", "10", null, null, new Point(x + .8, 20.5) { SRID = 4326 }, PropertyRegistrationStatus.Active, PropertySituation.Occupied);
         if (archivedProperty) property.Archive();
         db.Neighborhoods.Add(neighborhood);
         db.Microregions.AddRange(micro, otherMicro);

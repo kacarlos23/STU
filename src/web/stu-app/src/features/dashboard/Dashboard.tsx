@@ -3,6 +3,7 @@ import { InteractionProvider, useUiActions, type AuthenticatedContext } from '@s
 import { StuIcon } from './StuIcon'
 
 const TerritoryWorkspace = lazy(async () => ({ default: (await import('@stu/shared/territory')).TerritoryWorkspace }))
+const FamilyWorkspace = lazy(async () => ({ default: (await import('@stu/shared/families')).FamilyWorkspace }))
 const PropertyWorkspace = lazy(async () => ({ default: (await import('@stu/shared/properties')).PropertyWorkspace }))
 const OperationalWorkspace = lazy(async () => ({ default: (await import('@stu/shared/operations')).OperationalWorkspace }))
 const NotificationCenter = lazy(async () => ({ default: (await import('@stu/shared/notifications')).NotificationCenter }))
@@ -17,6 +18,8 @@ type DashboardSummary = {
   healthUnitName: string | null
   activeProperties: number
   activeFamilyIdentifiers: number
+  propertiesWithoutFamily: number
+  familiesWithoutProperty: number
   visitsThisMonth: number
   visitsPreviousMonth: number
   visitsChangePercent: number | null
@@ -26,12 +29,13 @@ type DashboardSummary = {
   microregions: MicroregionSummary[]
   stage: string
 }
-type Section = 'overview' | 'map' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
+type Section = 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
 type NavItem = { id: Section; label: string; icon: Parameters<typeof StuIcon>[0]['name']; management?: boolean }
 
 const navigation: NavItem[] = [
   { id: 'overview', label: 'Visão geral', icon: 'home' },
   { id: 'map', label: 'Território', icon: 'map' },
+  { id: 'families', label: 'Famílias', icon: 'users' },
   { id: 'coverage', label: 'Cobertura', icon: 'coverage' },
   { id: 'operations', label: 'Arquivos e dados', icon: 'database' },
 ]
@@ -63,7 +67,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
     if (next !== section) void guard(() => changeSection(next))
   }
   function openCreate() {
-    void guard(() => { setCreateRequest(value => value + 1); changeSection('coverage') })
+    void guard(() => { setCreateRequest(value => value + 1); changeSection('families') })
   }
   function openCoverage(filter = '') {
     void guard(() => {
@@ -77,7 +81,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
     if (!value) return
     void guard(() => {
       setPropertySearchRequest(current => ({ value, nonce: current.nonce + 1 }))
-      changeSection('coverage')
+      changeSection(canViewFamilies ? 'families' : 'coverage')
     })
   }
 
@@ -122,7 +126,8 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const firstName = session.displayName.trim().split(/\s+/)[0]
   const canOnboard = session.roles.some(role => role.name === 'HealthUnitManager' || role.name === 'GlobalAdministrator')
   const canManageUsers = session.permissions.includes('*') || session.permissions.includes('health_unit.users.manage')
-  const canManageProperties = session.permissions.includes('*') || session.permissions.includes('properties.manage')
+  const canViewFamilies = session.permissions.includes('*') || session.permissions.includes('families.view')
+  const canManageFamilies = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('families.manage'))
   const managementItems: NavItem[] = [
     ...(canManageUsers ? [{ id: 'users', label: 'Servidores', icon: 'users', management: true } as NavItem] : []),
     ...(canOnboard ? [
@@ -138,7 +143,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">STU</span><span className="brand-copy">Sistema Territorial<br />das UBS</span></div>
         <nav aria-label="Navegação principal">
-          {navigation.map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
+          {navigation.filter(item => item.id !== 'families' || canViewFamilies).map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
           {managementItems.map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
           <button aria-label="Configurações (em breve)" className="nav-item nav-item--management" disabled title="Disponível em breve" type="button"><span><StuIcon name="settings" /></span>Configurações</button>
           <div className="mobile-more" ref={mobileMore}>
@@ -152,19 +157,20 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
       <main className={`dashboard${section === 'map' ? ' dashboard--map' : ''}`} id="main-content">
         <header className={`site-header${activeModule ? ' site-header--module' : ''}`}>
           {activeModule ? <div className="module-page-context"><span><StuIcon name={activeModule.icon} size={22} /></span><div><h1 ref={pageHeading} tabIndex={-1}>{activeModule.title}</h1><p>{activeModule.description}</p></div></div> : <div className="unit-context"><span><strong>{summary?.healthUnitName ?? session.healthUnit?.name ?? 'Administração global'}</strong><StuIcon name="chevron" size={13} /></span><small>{session.healthUnit?.code ? `${session.healthUnit.code} · Município de Teixeira de Freitas` : 'Município de Teixeira de Freitas'}</small></div>}
-          {!activeModule && <form aria-label="Busca geral" className="site-search" onSubmit={submitHeaderSearch}><button aria-label="Buscar imóveis" type="submit"><StuIcon name="search" size={17} /></button><input aria-label="Buscar imóvel, família ou endereço" onChange={event => setHeaderSearch(event.target.value)} placeholder="Buscar imóvel, família ou endereço..." type="search" value={headerSearch} /></form>}
+          {!activeModule && <form aria-label="Busca geral" className="site-search" onSubmit={submitHeaderSearch}><button aria-label="Buscar famílias" type="submit"><StuIcon name="search" size={17} /></button><input aria-label="Buscar família por número ou responsável" onChange={event => setHeaderSearch(event.target.value)} placeholder="Buscar família por número ou responsável..." type="search" value={headerSearch} /></form>}
           <div className="site-header-tools"><div className="site-notifications"><Suspense fallback={null}><NotificationCenter /></Suspense></div><div className={`site-profile${profileMenuOpen ? ' site-profile--open' : ''}`} ref={profileMenu}><button aria-controls="site-profile-menu" aria-expanded={profileMenuOpen} aria-haspopup="menu" aria-label="Menu do usuário" className="site-profile-trigger" onClick={() => { setMobileMoreOpen(false); setProfileMenuOpen(value => !value) }} ref={profileMenuTrigger} type="button"><span className="avatar">{initials(session.displayName)}</span><span className="site-profile-copy"><strong>{session.displayName}</strong><small>{roleLabel}</small></span><StuIcon name="chevron" size={14} /></button>{profileMenuOpen && <div className="site-profile-menu" id="site-profile-menu" role="menu"><button onClick={() => { setProfileMenuOpen(false); void guard(() => { void logout() }) }} role="menuitem" type="button"><StuIcon name="logout" size={17} />Sair do STU</button></div>}</div></div>
         </header>
         <div className={`dashboard-content${section === 'map' ? ' dashboard-content--map' : ''}`}>
           {!online && <div className="connectivity-banner" role="status"><StuIcon name="warning" /><span><strong>Você está sem conexão.</strong> A consulta e o envio de informações estão temporariamente indisponíveis.</span></div>}
           {section === 'overview' && <header className="dashboard-header">
             <div><span className="breadcrumb">{section === 'overview' ? formatToday() : 'Operação territorial'}</span><h1 ref={pageHeading} tabIndex={-1}>{sectionTitle(section, firstName)}</h1><p>{summary?.healthUnitName ?? session.healthUnit?.name ?? 'Administração global'}</p></div>
-            <div className="header-actions">{section === 'overview' && canManageProperties && <button className="primary-action" disabled={!online} onClick={openCreate} title={online ? undefined : 'Conecte-se para cadastrar um imóvel'} type="button"><StuIcon name="plus" size={18} /> Cadastrar imóvel</button>}</div>
+            <div className="header-actions">{section === 'overview' && canManageFamilies && <button className="primary-action" disabled={!online} onClick={openCreate} title={online ? undefined : 'Conecte-se para cadastrar uma família'} type="button"><StuIcon name="plus" size={18} /> Cadastrar família</button>}</div>
           </header>}
           {error && <div className="dashboard-error" role="alert">{error}</div>}
-          {section === 'overview' && <Overview canCreate={canManageProperties} healthUnitId={session.healthUnit?.id} online={online} openCreate={openCreate} openCoverage={openCoverage} openMap={() => setSection('map')} summary={summary} />}
+          {section === 'overview' && <Overview openFamilies={canViewFamilies ? () => setSection('families') : undefined} canCreate={canManageFamilies} healthUnitId={session.healthUnit?.id} online={online} openCreate={openCreate} openCoverage={openCoverage} openMap={() => setSection('map')} summary={summary} />}
           {section === 'map' && <Suspense fallback={<WorkspaceSkeleton label="Carregando o mapa" />}><TerritoryWorkspace global={session.roles.some(role => role.name === 'GlobalAdministrator')} session={session} /></Suspense>}
-          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace coverageRequest={propertyCoverageRequest} createRequest={createRequest} onOpenTerritory={() => setSection('map')} searchRequest={propertySearchRequest} session={session} /></Suspense>}
+          {section === 'families' && canViewFamilies && <Suspense fallback={<WorkspaceSkeleton label="Carregando famílias" />}><FamilyWorkspace session={session} searchRequest={propertySearchRequest} createRequest={createRequest} onOpenProperty={id => { setPropertySearchRequest(current => ({ value: id, nonce: current.nonce + 1 })); changeSection('coverage') }} /></Suspense>}
+          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('map')} searchRequest={propertySearchRequest} session={session} /></Suspense>}
           {section === 'operations' && <Suspense fallback={<WorkspaceSkeleton label="Carregando arquivos e dados" />}><OperationalWorkspace session={session} /></Suspense>}
           {section === 'users' && canManageUsers && <Suspense fallback={<WorkspaceSkeleton label="Carregando a equipe" />}><HealthUnitUsersWorkspace session={session} /></Suspense>}
           {section === 'onboarding' && canOnboard && <Suspense fallback={<WorkspaceSkeleton label="Verificando a pré-implantação" />}><OnboardingWorkspace actions={{ territory: () => setSection('map'), coverage: () => openCoverage(''), operations: () => setSection('operations'), users: () => setSection('users') }} session={session} /></Suspense>}
@@ -194,15 +200,15 @@ function SidebarTopography() {
   </svg>
 }
 
-function Overview({ canCreate, healthUnitId, online, openCreate, openCoverage, openMap, summary }: { canCreate: boolean; healthUnitId?: string; online: boolean; openCreate: () => void; openCoverage: (filter?: string) => void; openMap: () => void; summary: DashboardSummary | null }) {
+function Overview({ openFamilies, canCreate, healthUnitId, online, openCreate, openCoverage, openMap, summary }: { openFamilies?: () => void; canCreate: boolean; healthUnitId?: string; online: boolean; openCreate: () => void; openCoverage: (filter?: string) => void; openMap: () => void; summary: DashboardSummary | null }) {
   const coverageTotal = summary ? Object.values(summary.coverage ?? {}).reduce((total, value) => total + value, 0) : 0
   const alertPercent = percentOf(summary?.coverageAlerts ?? 0, coverageTotal)
   const unassignedPercent = percentOf(summary?.unassignedMicroregions ?? 0, summary?.microregions?.length ?? 0)
   return <div className="overview">
     <section className="metrics" aria-label="Indicadores da UBS">
-      <Metric detail={`${summary?.activeFamilyIdentifiers ?? 0} identificações familiares`} icon="building" label="Imóveis ativos" onClick={() => openCoverage('')} tone="green" value={summary?.activeProperties} />
+      <Metric detail={openFamilies ? `${summary?.familiesWithoutProperty ?? 0} sem imóvel · ${summary?.activeProperties ?? 0} imóveis ativos` : `${summary?.activeProperties ?? 0} endereços cadastrados`} icon="building" label={openFamilies ? 'Famílias cadastradas' : 'Imóveis ativos'} onClick={openFamilies ?? (() => openCoverage(''))} tone="green" value={openFamilies ? summary?.activeFamilyIdentifiers : summary?.activeProperties} />
       <Metric detail={trendLabel(summary?.visitsChangePercent)} icon="calendar" label="Visitas neste mês" tone="blue" value={summary?.visitsThisMonth} />
-      <Metric detail={`${summary?.coverageAlerts ?? 0} de ${coverageTotal} imóveis · ${alertPercent}%`} icon="warning" label="Alertas de cobertura" onClick={() => openCoverage('pending')} tone="coral" value={summary?.coverageAlerts} />
+      <Metric detail={`${summary?.coverageAlerts ?? 0} de ${coverageTotal} famílias · ${alertPercent}%`} icon="warning" label="Alertas de cobertura" onClick={() => openCoverage('pending')} tone="coral" value={summary?.coverageAlerts} />
       <Metric detail={`${summary?.unassignedMicroregions ?? 0} de ${summary?.microregions?.length ?? 0} áreas · ${unassignedPercent}%`} icon="users" label="Microrregiões sem agente" onClick={openMap} tone="violet" value={summary?.unassignedMicroregions} />
     </section>
     <section className="dashboard-grid">
@@ -214,14 +220,14 @@ function Overview({ canCreate, healthUnitId, online, openCreate, openCoverage, o
         <article className="coverage-card">
           <div className="card-heading"><div><span className="section-kicker">Cobertura</span><h2>Situação dos imóveis</h2></div><button onClick={() => openCoverage('')} type="button">Ver os {coverageTotal} imóveis</button></div>
           {coverageTotal > 0 ? <>
-            <div aria-label={`Cobertura de ${coverageTotal} imóveis`} className="coverage-bar"><i className="coverage-bar__covered" style={{ flexGrow: summary?.coverage?.covered ?? 0 }} /><i className="coverage-bar__attention" style={{ flexGrow: summary?.coverage?.neverVisited ?? 0 }} /><i className="coverage-bar__alert" style={{ flexGrow: summary?.coverage?.overdue ?? 0 }} /><i className="coverage-bar__neutral" style={{ flexGrow: summary?.coverage?.notConfigured ?? 0 }} /></div>
+            <div aria-label={`Cobertura de ${coverageTotal} famílias`} className="coverage-bar"><i className="coverage-bar__covered" style={{ flexGrow: summary?.coverage?.covered ?? 0 }} /><i className="coverage-bar__attention" style={{ flexGrow: summary?.coverage?.neverVisited ?? 0 }} /><i className="coverage-bar__alert" style={{ flexGrow: summary?.coverage?.overdue ?? 0 }} /><i className="coverage-bar__neutral" style={{ flexGrow: summary?.coverage?.notConfigured ?? 0 }} /></div>
             <dl className="coverage-list"><CoverageRow color="green" label="Em dia" onClick={() => openCoverage('covered')} total={coverageTotal} value={summary?.coverage?.covered} /><CoverageRow color="amber" label="Nunca visitado" onClick={() => openCoverage('neverVisited')} total={coverageTotal} value={summary?.coverage?.neverVisited} /><CoverageRow color="coral" label="Fora do prazo" onClick={() => openCoverage('overdue')} total={coverageTotal} value={summary?.coverage?.overdue} /><CoverageRow color="violet" label="Sem regra" onClick={() => openCoverage('notConfigured')} total={coverageTotal} value={summary?.coverage?.notConfigured} /></dl>
-          </> : <div className="card-empty"><strong>A cobertura aparecerá aqui</strong><span>Cadastre imóveis e defina os prazos das microrregiões.</span></div>}
+          </> : <div className="card-empty"><strong>A cobertura aparecerá aqui</strong><span>Vincule famílias aos imóveis e defina os prazos das microrregiões.</span></div>}
         </article>
         <article className="quick-card">
           <div><span className="section-kicker">Atalhos</span><h2>Ações rápidas</h2></div>
-          <div className="quick-actions">{canCreate && <button disabled={!online} onClick={openCreate} type="button"><span className="quick-icon quick-icon--green"><StuIcon name="plus" /></span><span><strong>Cadastrar imóvel</strong><small>Adicionar endereço ao território</small></span></button>}<button onClick={() => openCoverage('pending')} type="button"><span className="quick-icon quick-icon--amber"><StuIcon name="calendar" /></span><span><strong>Registrar visita</strong><small>Escolher entre {summary?.coverageAlerts ?? 0} imóveis que pedem atenção</small></span></button><button onClick={openMap} type="button"><span className="quick-icon quick-icon--blue"><StuIcon name="map" /></span><span><strong>Explorar território</strong><small>Consultar áreas e agentes</small></span></button></div>
-          <p className="stage-note">{summary?.stage ?? 'Carregando situação da implantação…'}</p>
+          <div className="quick-actions">{canCreate && <button disabled={!online} onClick={openCreate} type="button"><span className="quick-icon quick-icon--green"><StuIcon name="plus" /></span><span><strong>Cadastrar família</strong><small>Adicionar número e responsável</small></span></button>}<button onClick={() => openCoverage('pending')} type="button"><span className="quick-icon quick-icon--amber"><StuIcon name="calendar" /></span><span><strong>Registrar visita</strong><small>Escolher entre {summary?.coverageAlerts ?? 0} famílias que pedem atenção</small></span></button><button onClick={openMap} type="button"><span className="quick-icon quick-icon--blue"><StuIcon name="map" /></span><span><strong>Explorar território</strong><small>Consultar áreas e agentes</small></span></button></div>
+          <p className="stage-note">{summary?.stage ?? 'Carregando situação da implantação…'} · {summary?.propertiesWithoutFamily ?? 0} imóveis sem família · {summary?.familiesWithoutProperty ?? 0} famílias sem imóvel</p>
         </article>
       </aside>
     </section>
@@ -237,7 +243,7 @@ function Metric({ detail, icon, label, onClick, tone, value }: { detail: string;
 
 function CoverageRow({ color, label, onClick, total, value }: { color: string; label: string; onClick: () => void; total: number; value?: number }) {
   const count = value ?? 0
-  return <div><dt><i className={`coverage-key coverage-key--${color}`} />{label}</dt><dd><button aria-label={`${label}: ${count} de ${total} imóveis`} onClick={onClick} type="button"><strong>{count}</strong><span>de {total} · {percentOf(count, total)}%</span></button></dd></div>
+  return <div><dt><i className={`coverage-key coverage-key--${color}`} />{label}</dt><dd><button aria-label={`${label}: ${count} de ${total} famílias`} onClick={onClick} type="button"><strong>{count}</strong><span>de {total} · {percentOf(count, total)}%</span></button></dd></div>
 }
 
 function percentOf(value: number, total: number) {
@@ -266,9 +272,10 @@ function trendLabel(value: number | null | undefined) {
 }
 function initials(name: string) { return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') }
 function formatToday() { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date()) }
-function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : section === 'onboarding' ? 'Preparação do piloto' : section === 'pilot-release' ? 'Decisão do piloto' : `Bom trabalho, ${firstName}.` }
+function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'families' ? 'Famílias' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : section === 'onboarding' ? 'Preparação do piloto' : section === 'pilot-release' ? 'Decisão do piloto' : `Bom trabalho, ${firstName}.` }
 function moduleContext(section: Section): { title: string; description: string; icon: NavItem['icon'] } | null {
   if (section === 'map') return { title: 'Mapa territorial', description: 'Visualize as microrregiões, a cobertura e os limites do território da UBS.', icon: 'map' }
+  if (section === 'families') return { title: 'Famílias', description: 'Cadastre e acompanhe famílias, seus imóveis e visitas.', icon: 'users' }
   if (section === 'coverage') return { title: 'Cobertura', description: 'Consulte os imóveis, as visitas e a situação de cobertura da UBS.', icon: 'coverage' }
   if (section === 'operations') return { title: 'Arquivos e dados', description: 'Importe, exporte e acompanhe os dados operacionais da UBS.', icon: 'database' }
   if (section === 'users') return { title: 'Equipe da UBS', description: 'Gerencie os servidores, as funções e os acessos vinculados à UBS.', icon: 'users' }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\STU.Api\STU.Api.csproj" />
     <ProjectReference Include="..\..\src\STU.Infrastructure\STU.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\tools\STU.FamilyReset\STU.FamilyReset.csproj" Aliases="ResetTool" />
+    <ProjectReference Include="..\..\src\STU.Worker\STU.Worker.csproj" Aliases="Worker" />
   </ItemGroup>
 
 </Project>

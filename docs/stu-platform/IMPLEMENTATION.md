@@ -58,7 +58,7 @@ Users only receive authorized map data; changes are previewed, transactional, ve
 
 ### Objective
 
-Implement property points and footprints, family-number uniqueness, structured visits, operational tags, coverage periods, and history.
+Implement property points and footprints, structured visits, operational tags, coverage periods, and history. The independent [family model](../families/IMPLEMENTATION.md) supersedes property-bound family numbers: a family has a unique number per UBS and an optional, exclusive current residence.
 
 ### Success criteria
 

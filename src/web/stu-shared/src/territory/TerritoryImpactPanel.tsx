@@ -24,7 +24,7 @@ export function TerritoryImpactPanel({ impact }: { impact: TerritoryImpact }) {
         <ol>
           {impact.affectedProperties.map((property) => (
             <li key={property.id}>
-              <strong>{property.street}, nº {property.houseNumber} · Família {property.familyNumber}</strong>
+              <strong>{property.street}, nº {property.houseNumber}</strong>
               <span>{property.reason}</span>
             </li>
           ))}

@@ -10,19 +10,34 @@ import '../../styles/purple-theme.css'
 if (!import.meta.env.DEV || !['localhost', '127.0.0.1'].includes(location.hostname)) throw new Error('Somente validação local')
 const boundary = { type: 'Polygon' as const, coordinates: [[[-39.758,-17.54],[-39.752,-17.54],[-39.752,-17.535],[-39.758,-17.535],[-39.758,-17.54]]] }
 const after = { type: 'Polygon' as const, coordinates: [[[-39.758,-17.54],[-39.754,-17.54],[-39.754,-17.535],[-39.758,-17.535],[-39.758,-17.54]]] }
-const session: Session = { id: 'visual-user', userName: 'visual', displayName: 'Gerente de validação', mustChangePassword: false, healthUnit: { id: 'visual-unit', code: 'TESTE', name: 'UBS fictícia — validação visual' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['properties.view', 'properties.manage', 'visits.view', 'visits.manage', 'territory.manage', 'health_unit.users.manage', 'reports.export'] }
+const session: Session = { id: 'visual-user', userName: 'visual', displayName: 'Gerente de validação', mustChangePassword: false, healthUnit: { id: 'visual-unit', code: 'TESTE', name: 'UBS fictícia — validação visual' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['families.view', 'families.manage', 'properties.view', 'properties.manage', 'visits.view', 'visits.manage', 'territory.manage', 'health_unit.users.manage', 'reports.export'] }
 const records = [
   { id: 'p1', houseNumber: '120', familyNumber: '001', registrationStatus: 'Active', archivedAtUtc: null, coverageStatus: 'overdue', lastVisitAtUtc: '2026-05-01T12:00:00Z' },
   { id: 'p2', houseNumber: '122', familyNumber: '002', registrationStatus: 'Active', archivedAtUtc: null, coverageStatus: 'neverVisited', lastVisitAtUtc: null },
   { id: 'p3', houseNumber: '124', familyNumber: '003', registrationStatus: 'Draft', archivedAtUtc: null, coverageStatus: 'neverVisited', lastVisitAtUtc: null },
   { id: 'p4', houseNumber: '126', familyNumber: '004', registrationStatus: 'Active', archivedAtUtc: '2026-09-01', coverageStatus: 'neverVisited', lastVisitAtUtc: null },
 ].map(item => ({ ...item, street: 'Rua de demonstração', microregionId: 'micro', healthUnitId: 'visual-unit', geometry: { type: 'Point', coordinates: [-39.755,-17.537] }, situation: 'Occupied', tags: [], concurrencyToken: 'visual' }))
+const familyRecords = [
+  { id: 'f1', number: '001', responsibleName: 'Ana-María D’Ávila', state: 'linked', currentProperty: { ...records[0], startedAtUtc: '2026-09-15T12:00:00Z' }, coverageStatus: 'covered', lastVisitAtUtc: '2026-09-10T12:00:00Z', archivedAtUtc: null },
+  { id: 'f2', number: '002', responsibleName: 'João de Souza', state: 'unlinked', currentProperty: null, coverageStatus: 'noProperty', lastVisitAtUtc: null, archivedAtUtc: null },
+  { id: 'f3', number: '003', responsibleName: 'Rosa dos Santos', state: 'archived', currentProperty: null, coverageStatus: 'archived', lastVisitAtUtc: null, archivedAtUtc: '2026-09-01T12:00:00Z' },
+].map(item => ({ ...item, healthUnitId: 'visual-unit', concurrencyToken: 'visual' }))
 const originalFetch = globalThis.fetch.bind(globalThis)
 globalThis.fetch = async (input, init) => {
   const path = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   if (!path.startsWith('/api/')) return originalFetch(input, init)
   if (init?.method && init.method !== 'GET') return Response.json({ detail: 'Demonstração local: nenhuma gravação é permitida.' }, { status: 403 })
   const url = new URL(path, location.origin)
+  if (url.pathname === '/api/families') {
+    const state = url.searchParams.get('state'), query = url.searchParams.get('query')?.toLowerCase() ?? ''
+    const items = familyRecords.filter(f => (state === 'all' || (state === 'active' ? !f.archivedAtUtc : f.state === state)) && `${f.number} ${f.responsibleName}`.toLowerCase().includes(query))
+    return Response.json({ items, total: items.length, page: 1, pageSize: 25 })
+  }
+  if (url.pathname === '/api/families/available-properties') return Response.json({ items: [records[1]], total: 1, page: 1, pageSize: 25 })
+  const family = familyRecords.find(f => url.pathname === `/api/families/${f.id}`)
+  if (family) return Response.json(family)
+  if (/\/api\/families\/f\d\/history/.test(path)) return Response.json({ links: path.includes('/f1/') ? [{ id: 'l1', propertyId: 'p1', street: 'Rua de demonstração', houseNumber: '120', startedAtUtc: '2026-09-15T12:00:00Z', endedAtUtc: null }, { id: 'l0', propertyId: 'p2', street: 'Rua das Acácias', houseNumber: '80', startedAtUtc: '2026-06-01T12:00:00Z', endedAtUtc: '2026-09-15T12:00:00Z' }] : [], versions: [{ id: 'fv1', versionNumber: 1, number: '001', responsibleName: 'Ana-María D’Ávila', changeKind: 'Create', changedAtUtc: '2026-06-01T12:00:00Z' }] })
+  if (/\/api\/families\/f\d\/visits/.test(path)) return Response.json(path.includes('/f1/') ? [{ id: 'v1', familyId: 'f1', propertyId: 'p2', street: 'Rua das Acácias', houseNumber: '80', visitedAtUtc: '2026-09-10T12:00:00Z', agentName: 'Agente de demonstração', type: 'Routine', outcome: 'Completed', observedSituation: 'Occupied', accessDifficulty: false, note: 'Registro fictício anterior à mudança de imóvel.', archivedAtUtc: null, concurrencyToken: 'visual' }] : [])
   if (url.pathname === '/api/properties/address-suggestion') return Response.json({ found: true, street: 'Rua fictícia de validação', postalCode: '45990-000' })
   if (url.pathname === '/api/health-unit-users/reference-data') return Response.json({ healthUnit: session.healthUnit, roles: [{ id: 'manager-role', name: 'HealthUnitManager', displayName: 'Gerente da UBS', description: null, isSystem: true }, { id: 'agent-role', name: 'HealthAgent', displayName: 'Agente de saúde', description: null, isSystem: true }] })
   if (url.pathname === '/api/health-unit-users') return Response.json({ items: [{ id: 'visual-user', userName: 'gerente.ubs', displayName: 'Gerente da UBS Piloto', role: { id: 'manager-role', name: 'HealthUnitManager', displayName: 'Gerente da UBS', description: null, isSystem: true }, mustChangePassword: false, lockoutEnd: null, archivedAtUtc: null, manageable: false }, { id: 'agent-user', userName: 'maria.silva', displayName: 'Maria da Silva', role: { id: 'agent-role', name: 'HealthAgent', displayName: 'Agente de saúde', description: null, isSystem: true }, mustChangePassword: true, lockoutEnd: null, archivedAtUtc: null, manageable: true }, { id: 'archived-user', userName: 'joao.santos', displayName: 'João Santos', role: { id: 'agent-role', name: 'HealthAgent', displayName: 'Agente de saúde', description: null, isSystem: true }, mustChangePassword: false, lockoutEnd: null, archivedAtUtc: '2026-08-01T12:00:00Z', manageable: true }] })
@@ -53,7 +68,7 @@ const visualView = new URLSearchParams(location.search).get('view')
 createRoot(document.getElementById('root')!).render(visualView === 'comparison'
   ? <InteractionProvider><TerritoryComparison before={boundary} after={after} validated onClose={() => location.assign('/workflow-visual-test.html')} /></InteractionProvider>
   : <Dashboard session={session} logout={async () => {}} />)
-const targetNavigation = visualView === 'map' || visualView === 'territory-editor' ? 'Território' : visualView === 'coverage' ? 'Cobertura' : visualView === 'users' ? 'Servidores' : visualView === 'operations' ? 'Arquivos e dados' : visualView === 'onboarding' ? 'Pré-implantação' : visualView === 'release' ? 'Liberação do piloto' : null
+const targetNavigation = visualView === 'families' ? 'Famílias' : visualView === 'map' || visualView === 'territory-editor' ? 'Território' : visualView === 'coverage' ? 'Cobertura' : visualView === 'users' ? 'Servidores' : visualView === 'operations' ? 'Arquivos e dados' : visualView === 'onboarding' ? 'Pré-implantação' : visualView === 'release' ? 'Liberação do piloto' : null
 if (targetNavigation) window.setTimeout(() => {
   const targetButton = [...document.querySelectorAll<HTMLButtonElement>('nav button')].find(button => button.textContent?.includes(targetNavigation))
   targetButton?.click()

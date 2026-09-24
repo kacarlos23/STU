@@ -11,6 +11,7 @@
     <Project Path="tests/STU.UnitTests/STU.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/STU.FamilyReset/STU.FamilyReset.csproj" />
     <Project Path="tools/STU.PilotData/STU.PilotData.csproj" />
   </Folder>
 </Solution>

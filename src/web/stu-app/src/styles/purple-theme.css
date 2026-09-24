@@ -255,6 +255,6 @@ body,
   .nav-item--active,
   .nav-item--active > span {
     background: var(--color-lavender);
-    color: var(--color-violet);
+    color: #5836c8;
   }
 }

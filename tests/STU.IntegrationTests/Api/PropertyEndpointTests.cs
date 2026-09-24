@@ -66,7 +66,7 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         var token = created.GetProperty("concurrencyToken").GetGuid();
 
         using var duplicate = await SendWithCsrfAsync(client, HttpMethod.Post, "/api/properties", PropertyBody(setup.MicroregionId, setup.UnitId, "11", "F-100"));
-        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, duplicate.StatusCode);
 
         var updatedBody = PropertyBody(setup.MicroregionId, setup.UnitId, "12", "F-101", token);
         using var updated = await SendWithCsrfAsync(client, HttpMethod.Put, $"/api/properties/{propertyId}", updatedBody);
@@ -75,12 +75,14 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         var versions = await versionsResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(2, versions.GetArrayLength());
         Assert.Equal("ReassignIdentifiers", versions[0].GetProperty("changeKind").GetString());
-        Assert.Equal("F-100", versions[1].GetProperty("familyNumber").GetString());
+        Assert.Equal("10", versions[1].GetProperty("houseNumber").GetString());
+        Assert.False(versions[1].TryGetProperty("familyNumber", out _));
+        var family = await LinkFamilyAsync(client, propertyId, "F-100");
 
-        var invalidVisit = VisitBody("Retorno pelo CPF 123.456.789-00");
-        using var piiResponse = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/properties/{propertyId}/visits", invalidVisit);
+        var invalidVisit = VisitBody("Retorno pelo CPF 123.456.789-00", family.Token);
+        using var piiResponse = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/families/{family.Id}/visits", invalidVisit);
         Assert.Equal(HttpStatusCode.BadRequest, piiResponse.StatusCode);
-        using var visitResponse = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/properties/{propertyId}/visits", VisitBody("Portão lateral fechado."));
+        using var visitResponse = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/families/{family.Id}/visits", VisitBody("Portão lateral fechado.", family.Token));
         Assert.Equal(HttpStatusCode.Created, visitResponse.StatusCode);
 
         using var otherClient = CreateClient();
@@ -128,7 +130,9 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, archived.StatusCode);
         using var rule = await SendWithCsrfAsync(client, HttpMethod.Put, $"/api/property-settings/coverage/{setup.MicroregionId}", new { healthUnitId = setup.UnitId, maxDaysWithoutVisit = 90 });
         Assert.True(rule.IsSuccessStatusCode);
-        using var visit = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/properties/{ids[1]}/visits", VisitBody("Acesso liberado."));
+        await LinkFamilyAsync(client, ids[0], "FILTER-0");
+        var family = await LinkFamilyAsync(client, ids[1], "FILTER-1");
+        using var visit = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/families/{family.Id}/visits", VisitBody("Acesso liberado.", family.Token));
         Assert.Equal(HttpStatusCode.Created, visit.StatusCode);
 
         foreach (var (state, count) in new[] { ("active", 2), ("draft", 1), ("archived", 1), ("all", 4) })
@@ -202,7 +206,6 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         healthUnitId,
         street = "Rua das Flores",
         houseNumber = house,
-        familyNumber = family,
         postalCode = "12345-000",
         complement = (string?)null,
         geometry = new { type = "Point", coordinates = new[] { -46.5, -23.5 } },
@@ -212,7 +215,7 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         expectedVersion,
     };
 
-    private static object VisitBody(string? note) => new
+    private static object VisitBody(string? note, Guid? familyToken = null) => new
     {
         visitedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5),
         type = "Routine",
@@ -221,7 +224,20 @@ public sealed class PropertyEndpointTests(StuApiFactory factory)
         accessDifficulty = false,
         note,
         expectedVersion = (Guid?)null,
+        expectedFamilyVersion = familyToken,
     };
+
+    private static async Task<(Guid Id, Guid Token)> LinkFamilyAsync(HttpClient client, Guid propertyId, string number)
+    {
+        using var created = await SendWithCsrfAsync(client, HttpMethod.Post, "/api/families", new { number, responsibleName = "Responsável de teste" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var family = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var id = family.GetProperty("id").GetGuid();
+        var property = await client.GetFromJsonAsync<JsonElement>($"/api/properties/{propertyId}");
+        using var linked = await SendWithCsrfAsync(client, HttpMethod.Post, $"/api/families/{id}/property", new { propertyId, expectedVersion = family.GetProperty("concurrencyToken").GetGuid(), expectedPropertyVersion = property.GetProperty("concurrencyToken").GetGuid() });
+        Assert.Equal(HttpStatusCode.OK, linked.StatusCode);
+        return (id, (await linked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("concurrencyToken").GetGuid());
+    }
 
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = new Uri("https://localhost"), HandleCookies = true });
 

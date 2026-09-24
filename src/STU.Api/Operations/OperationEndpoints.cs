@@ -19,12 +19,12 @@ public static class OperationEndpoints
     {
         var jobs = endpoints.MapGroup("/api/operations").WithTags("Operational workflows").RequireAuthorization(StuPolicies.OperationalWorkflows).RequireRateLimiting("api");
         jobs.MapGet("/jobs", GetJobsAsync);
-        jobs.MapGet("/jobs/{id:guid}/download", DownloadAsync).RequireAuthorization(StuPolicies.ReportsExport);
+        jobs.MapGet("/jobs/{id:guid}/download", DownloadAsync).RequireAuthorization(StuPolicies.ReportsExport, StuPolicies.FamiliesView, StuPolicies.PropertiesView);
         Secure(jobs.MapPost("/jobs/{id:guid}/retry", RetryAsync));
-        Secure(jobs.MapPost("/imports/{id:guid}/approve", ApproveImportAsync)).RequireAuthorization(StuPolicies.TerritoryManage);
-        Secure(jobs.MapPost("/exports", CreateExportAsync)).RequireAuthorization(StuPolicies.ReportsExport);
+        Secure(jobs.MapPost("/imports/{id:guid}/approve", ApproveImportAsync)).RequireAuthorization(StuPolicies.TerritoryManage, StuPolicies.FamiliesManage, StuPolicies.PropertiesManage);
+        Secure(jobs.MapPost("/exports", CreateExportAsync)).RequireAuthorization(StuPolicies.ReportsExport, StuPolicies.FamiliesView, StuPolicies.PropertiesView);
 
-        var imports = endpoints.MapGroup("/api/operations/imports").WithTags("Operational workflows").RequireAuthorization(StuPolicies.TerritoryManage).RequireRateLimiting("api");
+        var imports = endpoints.MapGroup("/api/operations/imports").WithTags("Operational workflows").RequireAuthorization(StuPolicies.TerritoryManage, StuPolicies.FamiliesManage, StuPolicies.PropertiesManage).RequireRateLimiting("api");
         Secure(imports.MapPost("", CreateImportAsync));
 
         var notifications = endpoints.MapGroup("/api/notifications").WithTags("Notifications").RequireAuthorization(StuPolicies.PasswordChanged).RequireRateLimiting("api");
@@ -43,7 +43,7 @@ public static class OperationEndpoints
         var actor = await ActorAsync(http, users); var scope = Scope(actor, http.User, healthUnitId); if (scope.Error is not null) return scope.Error;
         var jobs = await (from job in db.OperationJobs.AsNoTracking() join user in db.Users.AsNoTracking() on job.CreatedByUserId equals user.Id
             where job.HealthUnitId == scope.UnitId orderby job.CreatedAtUtc descending
-            select new { job.Id, job.Kind, job.Status, job.Format, job.OriginalFileName, job.RecordCount, job.ValidationErrorCount, job.ErrorSummary, job.AttemptCount, job.ProgressPercentage, job.CreatedAtUtc, job.StartedAtUtc, job.ApprovedAtUtc, job.CompletedAtUtc, job.ConcurrencyToken, createdByName = user.DisplayName, canDownload = job.Status == OperationJobStatus.Completed && job.ResultFileName != null }).Take(100).ToListAsync();
+            select new { job.Id, job.Kind, job.Status, job.Format, job.OriginalFileName, job.RecordCount, job.FamilyCount, job.LinkCount, job.ValidationErrorCount, job.ErrorSummary, job.AttemptCount, job.ProgressPercentage, job.CreatedAtUtc, job.StartedAtUtc, job.ApprovedAtUtc, job.CompletedAtUtc, job.ConcurrencyToken, createdByName = user.DisplayName, canDownload = job.Status == OperationJobStatus.Completed && job.ResultFileName != null }).Take(100).ToListAsync();
         return Results.Ok(jobs);
     }
 
@@ -52,7 +52,7 @@ public static class OperationEndpoints
         var actor = await ActorAsync(http, users); var scope = Scope(actor, http.User, request.HealthUnitId); if (scope.Error is not null) return scope.Error;
         if (!Enum.TryParse<OperationFileFormat>(request.Format, true, out var format)) return Validation("format", "Use Csv, GeoJson, Kml ou GeoPackage.");
         if (request.MicroregionId.HasValue && !await db.Microregions.AnyAsync(item => item.Id == request.MicroregionId && item.HealthUnitId == scope.UnitId && item.ArchivedAtUtc == null)) return Validation("microregionId", "Selecione uma microrregião ativa da UBS.");
-        var parameters = JsonSerializer.Serialize(new { request.MicroregionId, request.Situation, request.FromUtc, request.ToUtc });
+        var parameters = JsonSerializer.Serialize(new { request.MicroregionId, request.Situation, request.FromUtc, request.ToUtc }, JsonSerializerOptions.Web);
         var job = OperationJob.CreateExport(scope.UnitId, actor.Id, format, parameters); db.OperationJobs.Add(job);
         Audit(db, http, actor, "Create", "OperationJob", job.Id, $"Exportação {format} solicitada."); await db.SaveChangesAsync();
         return Results.Accepted($"/api/operations/jobs/{job.Id}", new { job.Id, job.Status });
@@ -86,7 +86,9 @@ public static class OperationEndpoints
     {
         var job = await db.OperationJobs.SingleOrDefaultAsync(item => item.Id == id); if (job is null) return Results.NotFound(); var actor = await ActorAsync(http, users);
         var requiredPermission = job.Kind == OperationJobKind.PropertyImport ? StuPermissions.TerritoryManage : StuPermissions.ReportsExport;
-        if (!HasPermission(http.User, requiredPermission)) return Results.Forbid();
+        var requiredFamilyPermission = job.Kind == OperationJobKind.PropertyImport ? StuPermissions.FamiliesManage : StuPermissions.FamiliesView;
+        var requiredPropertyPermission = job.Kind == OperationJobKind.PropertyImport ? StuPermissions.PropertiesManage : StuPermissions.PropertiesView;
+        if (!HasPermission(http.User, requiredPermission) || !HasPermission(http.User, requiredFamilyPermission) || !HasPermission(http.User, requiredPropertyPermission)) return Results.Forbid();
         var scope = Scope(actor, http.User, healthUnitId ?? job.HealthUnitId); if (scope.Error is not null || scope.UnitId != job.HealthUnitId) return Results.Forbid();
         try { job.Retry(); } catch (InvalidOperationException error) { return Results.Conflict(new { error = error.Message }); }
         Audit(db, http, actor, "Retry", "OperationJob", job.Id, "Trabalho colocado novamente na fila."); await db.SaveChangesAsync(); return Results.Accepted();

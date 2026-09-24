@@ -1,3 +1,4 @@
+using STU.Api.Families;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using STU.Application.Security;
@@ -71,28 +72,34 @@ public static class DashboardEndpoints
         var activeMicroregions = scopedMicroregions.Count;
         var propertyRows = await dbContext.Properties.AsNoTracking()
             .Where(item => item.ArchivedAtUtc == null && item.RegistrationStatus == STU.Domain.Properties.PropertyRegistrationStatus.Active && scopedMicroregionIds.Contains(item.MicroregionId))
-            .Select(item => new { item.Id, item.MicroregionId, item.FamilyNumber }).ToListAsync();
+            .Select(item => new { item.Id, item.MicroregionId }).ToListAsync();
         var propertyIds = propertyRows.Select(item => item.Id).ToArray();
+        var canSeeFamilies = FamilyAccess.Has(context.User, StuPermissions.FamiliesView);
+        var currentFamilies = await FamilyAccess.CurrentByPropertyAsync(propertyIds, dbContext);
+        var visibleFamilies = selectedHealthUnitId.HasValue && canSeeFamilies
+            ? FamilyAccess.Authorized(dbContext, user, context.User, selectedHealthUnitId.Value).Where(f => f.ArchivedAtUtc == null)
+            : dbContext.Families.Where(f => false);
+        var familyIds = await visibleFamilies.Select(f => f.Id).ToArrayAsync();
         var monthStart = new DateTimeOffset(DateTimeOffset.UtcNow.Year, DateTimeOffset.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero);
         var previousMonthStart = monthStart.AddMonths(-1);
-        var visitsThisMonth = await dbContext.PropertyVisits.CountAsync(item => propertyIds.Contains(item.PropertyId) && item.ArchivedAtUtc == null && item.VisitedAtUtc >= monthStart);
-        var visitsPreviousMonth = await dbContext.PropertyVisits.CountAsync(item => propertyIds.Contains(item.PropertyId) && item.ArchivedAtUtc == null && item.VisitedAtUtc >= previousMonthStart && item.VisitedAtUtc < monthStart);
+        var visitsThisMonth = await dbContext.PropertyVisits.CountAsync(item => familyIds.Contains(item.FamilyId) && item.ArchivedAtUtc == null && item.VisitedAtUtc >= monthStart);
+        var visitsPreviousMonth = await dbContext.PropertyVisits.CountAsync(item => familyIds.Contains(item.FamilyId) && item.ArchivedAtUtc == null && item.VisitedAtUtc >= previousMonthStart && item.VisitedAtUtc < monthStart);
         int? visitsChangePercent = visitsPreviousMonth == 0
             ? null
             : (int)Math.Round((visitsThisMonth - visitsPreviousMonth) * 100d / visitsPreviousMonth, MidpointRounding.AwayFromZero);
         var lastVisits = await dbContext.PropertyVisits.AsNoTracking()
-            .Where(item => propertyIds.Contains(item.PropertyId) && item.ArchivedAtUtc == null)
-            .GroupBy(item => item.PropertyId)
+            .Where(item => familyIds.Contains(item.FamilyId) && item.ArchivedAtUtc == null)
+            .GroupBy(item => item.FamilyId)
             .Select(group => new { PropertyId = group.Key, LastVisit = group.Max(item => item.VisitedAtUtc) })
             .ToDictionaryAsync(item => item.PropertyId, item => item.LastVisit);
         var coverageRules = await dbContext.CoverageRules.AsNoTracking()
             .Where(item => scopedMicroregionIds.Contains(item.MicroregionId))
             .ToDictionaryAsync(item => item.MicroregionId, item => item.MaxDaysWithoutVisit);
         var now = DateTimeOffset.UtcNow;
-        var coverageRows = propertyRows.Select(item => new
+        var coverageRows = propertyRows.Where(item => canSeeFamilies && currentFamilies.ContainsKey(item.Id)).Select(item => new
         {
             Property = item,
-            Status = CoverageStatus(item.Id, item.MicroregionId, lastVisits, coverageRules, now),
+            Status = CoverageStatus(currentFamilies[item.Id].Id, item.MicroregionId, lastVisits, coverageRules, now),
         }).ToList();
         var coverage = new
         {
@@ -114,7 +121,8 @@ public static class DashboardEndpoints
                     item.Name,
                     item.Color,
                     assigned = item.AssignedAgentId.HasValue,
-                    activeProperties = rows.Count,
+                    activeProperties = propertyRows.Count(p => p.MicroregionId == item.Id),
+                    activeFamilies = rows.Count,
                     covered = rows.Count(row => row.Status == "covered"),
                     alerts = rows.Count(row => row.Status is "overdue" or "neverVisited"),
                 };
@@ -124,7 +132,9 @@ public static class DashboardEndpoints
         {
             healthUnitName,
             activeProperties = propertyRows.Count,
-            activeFamilyIdentifiers = propertyRows.Select(item => item.FamilyNumber).Distinct().Count(),
+            activeFamilyIdentifiers = familyIds.Length,
+            familiesWithoutProperty = await visibleFamilies.CountAsync(f => !dbContext.FamilyPropertyLinks.Any(l => l.FamilyId == f.Id && l.EndedAtUtc == null)),
+            propertiesWithoutFamily = propertyRows.Count(p => !currentFamilies.ContainsKey(p.Id)),
             visitsThisMonth,
             visitsPreviousMonth,
             visitsChangePercent,

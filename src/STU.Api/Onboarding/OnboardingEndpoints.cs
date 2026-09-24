@@ -145,7 +145,7 @@ public static class OnboardingEndpoints
         var (gapArea, outsideArea) = CoverageDifference(neighborhoods.Select(item => item.Geometry), microregions.Select(item => (Geometry)item.Boundary));
         var boundaries = microregions.ToDictionary(item => item.Id, item => (Geometry)item.Boundary);
         var propertiesOutside = properties.Count(item => !boundaries.TryGetValue(item.MicroregionId, out var boundary) || !boundary.Covers(item.Geometry));
-        var duplicateFamilies = properties.GroupBy(item => item.FamilyNumber, StringComparer.OrdinalIgnoreCase).Count(group => group.Count() > 1);
+        var duplicateFamilies = (await db.Families.AsNoTracking().Where(f => f.HealthUnitId == unitId).Select(f => f.Number).ToListAsync(cancellationToken)).GroupBy(number => number, StringComparer.OrdinalIgnoreCase).Count(group => group.Count() > 1);
 
         var activeUsers = await db.Users.AsNoTracking()
             .Where(item => item.HealthUnitId == unitId && item.ArchivedAtUtc == null)
@@ -278,6 +278,7 @@ public static class OnboardingEndpoints
             .OrderByDescending(item => item.OccurredAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
         if (entry is null) return null;
+        if (await db.AuditEntries.AnyAsync(e => e.EntityType == "FamiliesReset" && e.OccurredAtUtc >= entry.OccurredAtUtc, cancellationToken)) return null;
         string? hash = null;
         string? destination = null;
         if (!string.IsNullOrWhiteSpace(entry.AfterJson))

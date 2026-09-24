@@ -27,7 +27,7 @@ vi.mock('maplibre-gl', () => {
 
 const boundary: TerritoryGeometry = { type: 'Polygon', coordinates: [[[-40,-18],[-39,-18],[-39,-17],[-40,-17],[-40,-18]]] }
 const records = [
-  { id: 'p1', houseNumber: '12', familyNumber: '34', registrationStatus: 'Active', archivedAtUtc: null },
+  { id: 'p1', houseNumber: '12', familyNumber: '34', familyId: 'family-id', familyConcurrencyToken: 'family-version', registrationStatus: 'Active', archivedAtUtc: null },
   { id: 'p2', houseNumber: '14', familyNumber: '36', registrationStatus: 'Active', archivedAtUtc: null },
   { id: 'p3', houseNumber: '16', familyNumber: '38', registrationStatus: 'Draft', archivedAtUtc: null },
   { id: 'p4', houseNumber: '18', familyNumber: '40', registrationStatus: 'Active', archivedAtUtc: '2026-09-01' },
@@ -40,7 +40,7 @@ beforeEach(() => {
   addressStatus = 200
   fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input), url = new URL(path, 'https://test.local')
-    if (path === '/api/auth/me') return Promise.resolve(response({ id: 'manager', userName: 'manager', displayName: 'Gerente', mustChangePassword: false, healthUnit: { id: 'unit', name: 'UBS', code: 'UBS' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['properties.view','properties.manage','visits.view','visits.manage','territory.manage'] }))
+    if (path === '/api/auth/me') return Promise.resolve(response({ id: 'manager', userName: 'manager', displayName: 'Gerente', mustChangePassword: false, healthUnit: { id: 'unit', name: 'UBS', code: 'UBS' }, roles: [{ name: 'HealthUnitManager', displayName: 'Gerente' }], permissions: ['families.view','families.manage','properties.view','properties.manage','visits.view','visits.manage','territory.manage'] }))
     if (path === '/api/dashboard/summary') return Promise.resolve(response({ healthUnitName: 'UBS' }))
     if (path.startsWith('/api/notifications')) return Promise.resolve(response({ items: [], unreadCount: 0 }))
     if (path === '/api/auth/csrf') return Promise.resolve(response({ token: 'test-token' }))
@@ -69,22 +69,22 @@ async function openProperties() {
 
 describe('Melhorias operacionais', () => {
   it('busca o endereço ao clicar e preenche somente logradouro e CEP vazios', async () => {
-    render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Cadastrar imóvel' }))
-    const editor = await screen.findByRole('dialog', { name: 'Imóvel e número de família' })
+    await openProperties()
+    fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
+    const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
     await act(async () => { maps.at(-1)!.emit('click', { lngLat: { lng: -39.5, lat: -17.5 } }) })
     await waitFor(() => expect(within(editor).getByLabelText('Logradouro')).toHaveValue('Rua sugerida'), { timeout: 3000 })
     expect(within(editor).getByLabelText('CEP')).toHaveValue('45990-000')
     expect(within(editor).getByLabelText('Número da casa')).toHaveValue('')
-    expect(within(editor).getByLabelText('Número da família')).toHaveValue('')
+    expect(within(editor).queryByLabelText('Número da família')).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes('microregionId=micro&latitude=-17.5&longitude=-39.5'))).toBe(true)
   })
 
   it('preserva endereço manual e exige confirmação para substituí-lo pela sugestão', async () => {
-    render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Cadastrar imóvel' }))
-    const editor = await screen.findByRole('dialog', { name: 'Imóvel e número de família' })
+    await openProperties()
+    fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
+    const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
     await act(async () => { maps.at(-1)!.emit('click', { lngLat: { lng: -39.5, lat: -17.5 } }) })
     fireEvent.change(within(editor).getByLabelText('Logradouro'), { target: { value: 'Rua digitada' } })
@@ -101,9 +101,9 @@ describe('Melhorias operacionais', () => {
 
   it('mantém o cadastro manual disponível quando a consulta falha', async () => {
     addressStatus = 503
-    render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Cadastrar imóvel' }))
-    const editor = await screen.findByRole('dialog', { name: 'Imóvel e número de família' })
+    await openProperties()
+    fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
+    const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
     await act(async () => { maps.at(-1)!.emit('click', { lngLat: { lng: -39.5, lat: -17.5 } }) })
     expect(await screen.findByText('Não foi possível consultar o endereço. Você pode preencher manualmente.', {}, { timeout: 3000 })).toBeInTheDocument()
@@ -137,9 +137,9 @@ describe('Melhorias operacionais', () => {
   })
 
   it('abre o cadastro pelo atalho e protege o formulário ao fechar ou sair', async () => {
-    render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Cadastrar imóvel' }))
-    const editor = await screen.findByRole('dialog', { name: 'Imóvel e número de família' })
+    await openProperties()
+    fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
+    const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     fireEvent.change(within(editor).getByLabelText('Logradouro'), { target: { value: 'Rua nova' } })
     const unload = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(unload)
