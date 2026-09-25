@@ -77,3 +77,10 @@ if (visualView === 'territory-editor') window.setTimeout(() => {
   const createButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Microrregião'))
   createButton?.click()
 }, 1800)
+if (visualView === 'families') window.setTimeout(() => {
+  document.querySelector<HTMLButtonElement>('.family-row')?.click()
+}, 900)
+if (visualView === 'operations') window.setTimeout(() => {
+  const expectedColumns = document.querySelector<HTMLDetailsElement>('.operations-import-columns')
+  if (expectedColumns) expectedColumns.open = true
+}, 900)

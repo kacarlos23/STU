@@ -1,4 +1,5 @@
 extern alias Worker;
+using ClosedXML.Excel;
 using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using STU.Domain.Operations;
+using STU.Infrastructure.Operations;
 using STU.Infrastructure.Persistence;
 using OperationJobProcessor = Worker::STU.Worker.OperationJobProcessor;
 
@@ -76,6 +78,40 @@ public sealed class FamilyImportExportTests : IAsyncLifetime
         using var finalScope = factory.Services.CreateScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<StuDbContext>();
         Assert.Equal(OperationJobStatus.Failed, (await finalDb.OperationJobs.SingleAsync(j => j.Id == jobId)).Status);
         Assert.Equal(3, await finalDb.Properties.CountAsync(p => p.HealthUnitId == setup.UnitId)); Assert.Equal(1, await finalDb.Families.CountAsync(f => f.HealthUnitId == setup.UnitId)); Assert.Equal(0, await finalDb.FamilyPropertyLinks.CountAsync(l => l.HealthUnitId == setup.UnitId));
+    }
+
+    [Fact]
+    public async Task ExcelWorkbookImportsEachFieldFromItsOwnColumn()
+    {
+        var setup = await FamilyTestData.CreateAsync(factory); var code = await CodeAsync(setup.MicroregionId);
+        var name = Guid.NewGuid().ToString("N") + ".xlsx"; var path = Path.Combine(storage, name);
+        using (var workbook = new XLWorkbook(new MemoryStream(PropertyImportWorkbook.CreateTemplate())))
+        {
+            var sheet = workbook.Worksheet("Imóveis");
+            var values = new[] { code, "Rua da Planilha", "45", "F-XLSX", "Responsável da Planilha", "45990-000", "Casa A", "-39,6", "-17,6", "Active", "Occupied" };
+            for (var index = 0; index < values.Length; index++) sheet.Cell(2, index + 1).Value = values[index];
+            workbook.SaveAs(path);
+        }
+        Guid jobId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StuDbContext>(); var job = OperationJob.CreateImport(setup.UnitId, setup.ActorId, OperationFileFormat.Xlsx, name, "imoveis.xlsx");
+            db.OperationJobs.Add(job); await db.SaveChangesAsync(); jobId = job.Id;
+        }
+
+        await ProcessAsync();
+        using var client = await setup.LoginAsync(factory);
+        using (var validationScope = factory.Services.CreateScope())
+        {
+            var job = await validationScope.ServiceProvider.GetRequiredService<StuDbContext>().OperationJobs.SingleAsync(item => item.Id == jobId);
+            Assert.Equal(OperationJobStatus.AwaitingApproval, job.Status); Assert.Equal(1, job.RecordCount); Assert.Equal(1, job.FamilyCount);
+        }
+        using var approved = await FamilyTestData.SendAsync(client, HttpMethod.Post, $"/api/operations/imports/{jobId}/approve", null);
+        Assert.Equal(HttpStatusCode.Accepted, approved.StatusCode); await ProcessAsync();
+        using var finalScope = factory.Services.CreateScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<StuDbContext>();
+        var property = await finalDb.Properties.SingleAsync(item => item.HealthUnitId == setup.UnitId && item.Street == "Rua da Planilha");
+        Assert.Equal("45", property.HouseNumber); Assert.Equal("45990-000", property.PostalCode); Assert.Equal("Casa A", property.Complement);
+        Assert.Contains(await finalDb.Families.Where(item => item.HealthUnitId == setup.UnitId).ToListAsync(), item => item.Number == "F-XLSX" && item.ResponsibleName == "Responsável da Planilha");
     }
 
     private const string Header = "microregionCode,street,houseNumber,familyNumber,familyResponsibleName,longitude,latitude,registrationStatus,situation";

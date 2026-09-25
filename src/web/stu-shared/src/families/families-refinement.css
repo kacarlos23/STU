@@ -1,0 +1,16 @@
+.families-workspace input[type="search"],
+.family-link-dialog input[type="search"] {
+  background-color: #fff !important;
+  box-shadow: inset 0 0 0 1px #e7e0ef;
+}
+
+.families-workspace .family-unlink-button {
+  background: #fff0ee !important;
+  box-shadow: inset 0 0 0 1px #efc7c1;
+  color: #9c3f35;
+}
+
+.families-workspace .family-unlink-button:hover {
+  background: #ffe5e1 !important;
+  color: #842d25;
+}

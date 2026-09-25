@@ -44,7 +44,7 @@ await using (var command = db.Database.GetDbConnection().CreateCommand())
         for (var index = 1; index <= 3; index++) if (!rows.IsDBNull(index)) names.Add(rows.GetString(index));
         // A crash may leave output before the worker records its filename in the job.
         var id = rows.GetGuid(0).ToString("N");
-        foreach (var extension in new[] { ".stage.json", ".csv", ".geojson", ".kml", ".gpkg" }) names.Add(id + extension);
+        foreach (var extension in new[] { ".stage.json", ".xlsx", ".csv", ".geojson", ".kml", ".gpkg" }) names.Add(id + extension);
     }
 }
 var files = new List<object>();

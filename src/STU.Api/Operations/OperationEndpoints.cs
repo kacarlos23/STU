@@ -6,6 +6,7 @@ using STU.Application.Security;
 using STU.Domain.Auditing;
 using STU.Domain.Operations;
 using STU.Infrastructure.Identity;
+using STU.Infrastructure.Operations;
 using STU.Infrastructure.Persistence;
 
 namespace STU.Api.Operations;
@@ -13,7 +14,7 @@ namespace STU.Api.Operations;
 public static class OperationEndpoints
 {
     private const long MaxUploadBytes = 20 * 1024 * 1024;
-    private static readonly string[] AllowedImportExtensions = [".csv", ".json", ".geojson"];
+    private static readonly string[] AllowedImportExtensions = [".xlsx", ".csv", ".json", ".geojson"];
 
     public static IEndpointRouteBuilder MapOperationEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -25,6 +26,7 @@ public static class OperationEndpoints
         Secure(jobs.MapPost("/exports", CreateExportAsync)).RequireAuthorization(StuPolicies.ReportsExport, StuPolicies.FamiliesView, StuPolicies.PropertiesView);
 
         var imports = endpoints.MapGroup("/api/operations/imports").WithTags("Operational workflows").RequireAuthorization(StuPolicies.TerritoryManage, StuPolicies.FamiliesManage, StuPolicies.PropertiesManage).RequireRateLimiting("api");
+        imports.MapGet("/template", DownloadImportTemplate);
         Secure(imports.MapPost("", CreateImportAsync));
 
         var notifications = endpoints.MapGroup("/api/notifications").WithTags("Notifications").RequireAuthorization(StuPolicies.PasswordChanged).RequireRateLimiting("api");
@@ -50,7 +52,7 @@ public static class OperationEndpoints
     private static async Task<IResult> CreateExportAsync(CreateExportRequest request, HttpContext http, UserManager<ApplicationUser> users, StuDbContext db)
     {
         var actor = await ActorAsync(http, users); var scope = Scope(actor, http.User, request.HealthUnitId); if (scope.Error is not null) return scope.Error;
-        if (!Enum.TryParse<OperationFileFormat>(request.Format, true, out var format)) return Validation("format", "Use Csv, GeoJson, Kml ou GeoPackage.");
+        if (!Enum.TryParse<OperationFileFormat>(request.Format, true, out var format) || format == OperationFileFormat.Xlsx) return Validation("format", "Use Csv, GeoJson, Kml ou GeoPackage.");
         if (request.MicroregionId.HasValue && !await db.Microregions.AnyAsync(item => item.Id == request.MicroregionId && item.HealthUnitId == scope.UnitId && item.ArchivedAtUtc == null)) return Validation("microregionId", "Selecione uma microrregião ativa da UBS.");
         var parameters = JsonSerializer.Serialize(new { request.MicroregionId, request.Situation, request.FromUtc, request.ToUtc }, JsonSerializerOptions.Web);
         var job = OperationJob.CreateExport(scope.UnitId, actor.Id, format, parameters); db.OperationJobs.Add(job);
@@ -61,18 +63,23 @@ public static class OperationEndpoints
     private static async Task<IResult> CreateImportAsync(HttpRequest request, HttpContext http, UserManager<ApplicationUser> users, StuDbContext db, IConfiguration configuration)
     {
         if (!request.HasFormContentType) return Validation("file", "Envie o arquivo em formulário multipart.");
-        var form = await request.ReadFormAsync(); var file = form.Files.GetFile("file"); if (file is null || file.Length == 0) return Validation("file", "Selecione um arquivo CSV ou GeoJSON.");
+        var form = await request.ReadFormAsync(); var file = form.Files.GetFile("file"); if (file is null || file.Length == 0) return Validation("file", "Selecione uma planilha Excel, CSV ou GeoJSON.");
         if (file.Length > MaxUploadBytes) return Results.Problem(statusCode: 413, title: "Arquivo muito grande", detail: "O limite por importação é 20 MB.");
-        var extension = Path.GetExtension(Path.GetFileName(file.FileName)).ToLowerInvariant(); if (!AllowedImportExtensions.Contains(extension)) return Validation("file", "Use um arquivo .csv, .json ou .geojson.");
+        var extension = Path.GetExtension(Path.GetFileName(file.FileName)).ToLowerInvariant(); if (!AllowedImportExtensions.Contains(extension)) return Validation("file", "Use um arquivo .xlsx, .csv, .json ou .geojson.");
         if (!Guid.TryParse(form["healthUnitId"].FirstOrDefault(), out var requestedUnitId)) requestedUnitId = Guid.Empty;
         var actor = await ActorAsync(http, users); var scope = Scope(actor, http.User, requestedUnitId == Guid.Empty ? null : requestedUnitId); if (scope.Error is not null) return scope.Error;
         var storage = EnsureStorage(configuration); var storedName = $"{Guid.NewGuid():N}{extension}"; var fullPath = SafePath(storage, storedName);
         await using (var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) await file.CopyToAsync(stream);
-        var format = extension == ".csv" ? OperationFileFormat.Csv : OperationFileFormat.GeoJson;
+        var format = extension switch { ".xlsx" => OperationFileFormat.Xlsx, ".csv" => OperationFileFormat.Csv, _ => OperationFileFormat.GeoJson };
         var original = Path.GetFileName(file.FileName); var job = OperationJob.CreateImport(scope.UnitId, actor.Id, format, storedName, original); db.OperationJobs.Add(job);
         Audit(db, http, actor, "Create", "OperationJob", job.Id, $"Importação preparada a partir de {original}."); await db.SaveChangesAsync();
         return Results.Accepted($"/api/operations/jobs/{job.Id}", new { job.Id, job.Status });
     }
+
+    private static IResult DownloadImportTemplate() => Results.File(
+        PropertyImportWorkbook.CreateTemplate(),
+        PropertyImportWorkbook.ContentType,
+        PropertyImportWorkbook.FileName);
 
     private static async Task<IResult> ApproveImportAsync(Guid id, Guid? healthUnitId, HttpContext http, UserManager<ApplicationUser> users, StuDbContext db)
     {
@@ -131,8 +138,8 @@ public static class OperationEndpoints
 
     private static string EnsureStorage(IConfiguration configuration) { var root = Path.GetFullPath(configuration["Operations:StoragePath"] ?? Path.Combine(AppContext.BaseDirectory, "operations-data")); Directory.CreateDirectory(root); return root; }
     private static string SafePath(string root, string fileName) { var name = Path.GetFileName(fileName); var path = Path.GetFullPath(Path.Combine(root, name)); if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Caminho de arquivo inválido."); return path; }
-    private static string ContentType(OperationFileFormat format) => format switch { OperationFileFormat.Csv => "text/csv; charset=utf-8", OperationFileFormat.GeoJson => "application/geo+json", OperationFileFormat.Kml => "application/vnd.google-earth.kml+xml", _ => "application/geopackage+sqlite3" };
-    private static string Extension(OperationFileFormat format) => format switch { OperationFileFormat.Csv => "csv", OperationFileFormat.GeoJson => "geojson", OperationFileFormat.Kml => "kml", _ => "gpkg" };
+    private static string ContentType(OperationFileFormat format) => format switch { OperationFileFormat.Csv => "text/csv; charset=utf-8", OperationFileFormat.Xlsx => PropertyImportWorkbook.ContentType, OperationFileFormat.GeoJson => "application/geo+json", OperationFileFormat.Kml => "application/vnd.google-earth.kml+xml", _ => "application/geopackage+sqlite3" };
+    private static string Extension(OperationFileFormat format) => format switch { OperationFileFormat.Csv => "csv", OperationFileFormat.Xlsx => "xlsx", OperationFileFormat.GeoJson => "geojson", OperationFileFormat.Kml => "kml", _ => "gpkg" };
     private static ScopeResult Scope(ApplicationUser actor, System.Security.Claims.ClaimsPrincipal principal, Guid? requested) { if (principal.IsInRole(SystemRoles.GlobalAdministrator)) return requested.HasValue ? new(null, requested.Value) : new(Validation("healthUnitId", "Selecione uma UBS."), Guid.Empty); if (!actor.HealthUnitId.HasValue) return new(Results.Forbid(), Guid.Empty); if (requested.HasValue && requested != actor.HealthUnitId) return new(Results.Forbid(), Guid.Empty); return new(null, actor.HealthUnitId.Value); }
     private static bool HasPermission(System.Security.Claims.ClaimsPrincipal principal, string permission) => principal.IsInRole(SystemRoles.GlobalAdministrator) || principal.Claims.Any(claim => claim.Type == StuClaimTypes.Permission && (claim.Value == StuPermissions.All || claim.Value == permission));
     private static async Task<ApplicationUser> ActorAsync(HttpContext http, UserManager<ApplicationUser> users) => await users.GetUserAsync(http.User) ?? throw new InvalidOperationException("Usuário autenticado não encontrado.");

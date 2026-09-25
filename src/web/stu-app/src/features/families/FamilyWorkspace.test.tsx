@@ -90,6 +90,7 @@ describe('Cadastro e acompanhamento de famílias', () => {
     const dialog = screen.getByRole('dialog', { name: 'Vincular imóvel' })
     fireEvent.click(await within(dialog).findByRole('button', { name: /Rua das Acácias, nº 10/ }))
     expect(await screen.findByRole('button', { name: 'Alterar imóvel' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Encerrar vínculo' })).toHaveClass('family-unlink-button')
     const request = fetchMock.mock.calls.find(([path, init]) => path === '/api/families/f1/property' && init?.method === 'POST')
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ propertyId: 'p1', expectedVersion: 'fv1', expectedPropertyVersion: 'pv1' })
     expect(screen.getByRole('button', { name: 'Registrar visita' })).toBeEnabled()

@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -10,6 +11,7 @@ using STU.Application.Security;
 using STU.Domain.HealthUnits;
 using STU.Domain.Operations;
 using STU.Infrastructure.Identity;
+using STU.Infrastructure.Operations;
 using STU.Infrastructure.Persistence;
 
 namespace STU.IntegrationTests.Api;
@@ -85,6 +87,44 @@ public sealed class OperationEndpointTests(StuApiFactory factory)
         using var verificationScope = factory.Services.CreateScope();
         var verificationDb = verificationScope.ServiceProvider.GetRequiredService<StuDbContext>();
         Assert.Equal(OperationJobStatus.Failed, (await verificationDb.OperationJobs.SingleAsync(job => job.Id == jobId)).Status);
+    }
+
+    [Fact]
+    public async Task ExcelTemplateIsDownloadableAndCanBeQueuedForImport()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8]; const string password = "Operations!Test123";
+        var userName = $"operacoes.xlsx.{suffix}"; Guid unitId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StuDbContext>(); var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var unit = HealthUnit.Create($"OX-{suffix}", "UBS Operações Excel"); db.HealthUnits.Add(unit); await db.SaveChangesAsync(); unitId = unit.Id;
+            await CreateManagerAsync(users, userName, password, unit.Id);
+        }
+
+        using var client = CreateClient(); await LoginAsync(client, userName, password);
+        using var template = await client.GetAsync("/api/operations/imports/template");
+        Assert.Equal(HttpStatusCode.OK, template.StatusCode);
+        Assert.Equal(PropertyImportWorkbook.ContentType, template.Content.Headers.ContentType?.MediaType);
+        var bytes = await template.Content.ReadAsByteArrayAsync();
+        using (var workbook = new XLWorkbook(new MemoryStream(bytes)))
+        {
+            var sheet = workbook.Worksheet("Imóveis");
+            Assert.Equal("microregionCode", sheet.Cell(1, 1).GetString());
+            Assert.Equal("situation", sheet.Cell(1, 11).GetString());
+            Assert.NotNull(workbook.Worksheet("Instruções"));
+        }
+
+        using var csrfResponse = await client.GetAsync("/api/auth/csrf"); csrfResponse.EnsureSuccessStatusCode();
+        var csrf = await csrfResponse.Content.ReadFromJsonAsync<JsonElement>();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/operations/imports"); request.Headers.Add("X-STU-CSRF", csrf.GetProperty("token").GetString());
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(bytes); file.Headers.ContentType = new(PropertyImportWorkbook.ContentType);
+        form.Add(file, "file", PropertyImportWorkbook.FileName); form.Add(new StringContent(unitId.ToString()), "healthUnitId"); request.Content = form;
+        using var queued = await client.SendAsync(request); Assert.Equal(HttpStatusCode.Accepted, queued.StatusCode);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var jobs = verificationScope.ServiceProvider.GetRequiredService<StuDbContext>().OperationJobs;
+        Assert.Contains(await jobs.Where(item => item.HealthUnitId == unitId).ToListAsync(), item => item.Format == OperationFileFormat.Xlsx && item.OriginalFileName == PropertyImportWorkbook.FileName);
     }
 
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, BaseAddress = new Uri("https://localhost"), HandleCookies = true });

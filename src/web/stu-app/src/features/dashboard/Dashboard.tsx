@@ -31,6 +31,7 @@ type DashboardSummary = {
 }
 type Section = 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
 type NavItem = { id: Section; label: string; icon: Parameters<typeof StuIcon>[0]['name']; management?: boolean }
+type WorkspaceRequest = { value: string; nonce: number }
 
 const navigation: NavItem[] = [
   { id: 'overview', label: 'Visão geral', icon: 'home' },
@@ -48,7 +49,10 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const { guard } = useUiActions()
   const [createRequest, setCreateRequest] = useState(0)
   const [headerSearch, setHeaderSearch] = useState('')
-  const [propertySearchRequest, setPropertySearchRequest] = useState({ value: '', nonce: 0 })
+  const requestNonce = useRef(0)
+  const [familySearchRequest, setFamilySearchRequest] = useState<WorkspaceRequest>()
+  const [propertySearchRequest, setPropertySearchRequest] = useState<WorkspaceRequest>()
+  const [propertySelectionRequest, setPropertySelectionRequest] = useState<WorkspaceRequest>()
   const [propertyCoverageRequest, setPropertyCoverageRequest] = useState({ value: '', nonce: 0 })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +84,9 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
     const value = headerSearch.trim()
     if (!value) return
     void guard(() => {
-      setPropertySearchRequest(current => ({ value, nonce: current.nonce + 1 }))
+      const request = { value, nonce: ++requestNonce.current }
+      if (canViewFamilies) setFamilySearchRequest(request)
+      else setPropertySearchRequest(request)
       changeSection(canViewFamilies ? 'families' : 'coverage')
     })
   }
@@ -169,8 +175,8 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
           {error && <div className="dashboard-error" role="alert">{error}</div>}
           {section === 'overview' && <Overview openFamilies={canViewFamilies ? () => setSection('families') : undefined} canCreate={canManageFamilies} healthUnitId={session.healthUnit?.id} online={online} openCreate={openCreate} openCoverage={openCoverage} openMap={() => setSection('map')} summary={summary} />}
           {section === 'map' && <Suspense fallback={<WorkspaceSkeleton label="Carregando o mapa" />}><TerritoryWorkspace global={session.roles.some(role => role.name === 'GlobalAdministrator')} session={session} /></Suspense>}
-          {section === 'families' && canViewFamilies && <Suspense fallback={<WorkspaceSkeleton label="Carregando famílias" />}><FamilyWorkspace session={session} searchRequest={propertySearchRequest} createRequest={createRequest} onOpenProperty={id => { setPropertySearchRequest(current => ({ value: id, nonce: current.nonce + 1 })); changeSection('coverage') }} /></Suspense>}
-          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('map')} searchRequest={propertySearchRequest} session={session} /></Suspense>}
+          {section === 'families' && canViewFamilies && <Suspense fallback={<WorkspaceSkeleton label="Carregando famílias" />}><FamilyWorkspace session={session} searchRequest={familySearchRequest} onSearchHandled={nonce => setFamilySearchRequest(current => current?.nonce === nonce ? undefined : current)} createRequest={createRequest} onOpenProperty={id => { setPropertySelectionRequest({ value: id, nonce: ++requestNonce.current }); changeSection('coverage') }} /></Suspense>}
+          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('map')} searchRequest={propertySearchRequest} onSearchHandled={nonce => setPropertySearchRequest(current => current?.nonce === nonce ? undefined : current)} selectionRequest={propertySelectionRequest} onSelectionHandled={nonce => setPropertySelectionRequest(current => current?.nonce === nonce ? undefined : current)} session={session} /></Suspense>}
           {section === 'operations' && <Suspense fallback={<WorkspaceSkeleton label="Carregando arquivos e dados" />}><OperationalWorkspace session={session} /></Suspense>}
           {section === 'users' && canManageUsers && <Suspense fallback={<WorkspaceSkeleton label="Carregando a equipe" />}><HealthUnitUsersWorkspace session={session} /></Suspense>}
           {section === 'onboarding' && canOnboard && <Suspense fallback={<WorkspaceSkeleton label="Verificando a pré-implantação" />}><OnboardingWorkspace actions={{ territory: () => setSection('map'), coverage: () => openCoverage(''), operations: () => setSection('operations'), users: () => setSection('users') }} session={session} /></Suspense>}

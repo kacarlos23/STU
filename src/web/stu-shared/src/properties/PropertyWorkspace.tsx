@@ -15,6 +15,7 @@ import "./property-prerequisite.css";
 import "./pagination.css";
 import "./workflow.css";
 import "./properties-refinement.css";
+import "./property-search-refinement.css";
 import { useAddressSuggestion } from './useAddressSuggestion';
 import './address-suggestion.css';
 import { CloseIcon } from "../components/CloseIcon";
@@ -112,6 +113,9 @@ export function PropertyWorkspace({
   coverageRequest,
   onOpenTerritory,
   searchRequest,
+  onSearchHandled,
+  selectionRequest,
+  onSelectionHandled,
 }: {
   session: Session;
   global?: boolean;
@@ -119,6 +123,9 @@ export function PropertyWorkspace({
   coverageRequest?: PropertyCoverageRequest;
   onOpenTerritory?: () => void;
   searchRequest?: PropertySearchRequest;
+  onSearchHandled?: (nonce: number) => void;
+  selectionRequest?: PropertySearchRequest;
+  onSelectionHandled?: (nonce: number) => void;
 }) {
   const { guard, confirm } = useUiActions();
   const [preferences, setPreferences] = useSessionPreferences<Preferences>("properties:unified-coverage", {
@@ -130,6 +137,8 @@ export function PropertyWorkspace({
   const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null);
   const [createHandled, setCreateHandled] = useState(preferences.createHandled);
   const searchHandled = useRef(0);
+  const selectionHandled = useRef(0);
+  const requestedSelection = useRef("");
   const coverageHandled = useRef(0);
   const loadSequence = useRef(0);
   const [units, setUnits] = useState<Unit[]>(
@@ -138,6 +147,7 @@ export function PropertyWorkspace({
   const [unitId, setUnitId] = useState(preferences.unitId);
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [properties, setProperties] = useState<PropertyItem[]>([]);
+  const [openedProperty, setOpenedProperty] = useState<PropertyItem | null>(null);
   const [selectedId, setSelectedId] = useState(preferences.selectedId);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [occupancy, setOccupancy] = useState<{id:string;number:string;responsibleName:string;startedAtUtc:string;endedAtUtc:string|null}[]>([]);
@@ -173,16 +183,43 @@ export function PropertyWorkspace({
     if (!searchRequest || searchRequest.nonce === searchHandled.current) return;
     searchHandled.current = searchRequest.nonce;
     const nextQuery = searchRequest.value.trim();
+    requestedSelection.current = "";
+    setOpenedProperty(null);
     setQueryInput(nextQuery);
     setQuery(nextQuery);
     setSelectedId("");
     setPage(1);
     setView("properties");
-  }, [searchRequest]);
+    onSearchHandled?.(searchRequest.nonce);
+  }, [searchRequest, onSearchHandled]);
+
+  useEffect(() => {
+    if (!selectionRequest || selectionRequest.nonce === selectionHandled.current) return;
+    selectionHandled.current = selectionRequest.nonce;
+    const id = selectionRequest.value.trim();
+    onSelectionHandled?.(selectionRequest.nonce);
+    if (!id) return;
+    requestedSelection.current = id;
+    setOpenedProperty(null);
+    setQueryInput("");
+    setQuery("");
+    setSelectedId(id);
+    setPage(1);
+    setView("properties");
+    void fetch(`/api/properties/${encodeURIComponent(id)}`, { credentials: "include", cache: "no-store" })
+      .then(async response => {
+        if (!response.ok) throw new Error("Não foi possível abrir a ficha do imóvel selecionado.");
+        return await response.json() as PropertyItem;
+      })
+      .then(item => { if (requestedSelection.current === id) setOpenedProperty(item); })
+      .catch(caught => { if (requestedSelection.current === id) setError(messageOf(caught, "Falha ao abrir a ficha do imóvel.")); });
+  }, [selectionRequest, onSelectionHandled]);
 
   useEffect(() => {
     if (!coverageRequest || coverageRequest.nonce === coverageHandled.current) return;
     coverageHandled.current = coverageRequest.nonce;
+    requestedSelection.current = "";
+    setOpenedProperty(null);
     setCoverage(coverageRequest.value);
     setRecordState("active");
     setSelectedId("");
@@ -229,11 +266,12 @@ export function PropertyWorkspace({
         setReference(referenceData);
         setCoverageSummary(result.coverageSummary ?? null);
         if (page > Math.max(1, Math.ceil(result.total / 100))) setPage(Math.max(1, Math.ceil(result.total / 100)));
-        setSelectedId((current) =>
-          result.items.some((item) => item.id === current)
+        setSelectedId((current) => {
+          if (requestedSelection.current) return requestedSelection.current;
+          return result.items.some((item) => item.id === current)
             ? current
-            : (result.items[0]?.id ?? ""),
-        );
+            : (result.items[0]?.id ?? "");
+        });
       } catch (caught) {
         if (sequence === loadSequence.current) setError(messageOf(caught, "Falha ao carregar os imóveis."));
       } finally {
@@ -303,10 +341,13 @@ export function PropertyWorkspace({
   }, [selectedId, canViewVisits, canViewFamilies]);
 
   const filtered = properties;
-  const selected = properties.find((item) => item.id === selectedId) ?? null;
+  const selected = properties.find((item) => item.id === selectedId)
+    ?? (openedProperty?.id === selectedId ? openedProperty : null);
   const hasActiveFilters = recordState !== "active" || Boolean(queryInput.trim()) || Boolean(microregionId) || Boolean(coverage);
 
   function clearFilters() {
+    requestedSelection.current = "";
+    setOpenedProperty(null);
     setRecordState("active");
     setQueryInput("");
     setQuery("");
@@ -480,7 +521,7 @@ export function PropertyWorkspace({
             <div className="property-filter-heading"><div><h3 id="property-filter-title">Filtrar imóveis</h3><p>Refine a lista por cadastro, endereço, microrregião ou situação de cobertura.</p></div>{hasActiveFilters && <button onClick={clearFilters} type="button">Limpar filtros</button>}</div>
             <div className="property-filters">
               <label>Situação do cadastro<select aria-label="Situação do cadastro" value={recordState} onChange={event => { setRecordState(event.target.value as RecordState); setPage(1); }}><option value="active">Ativos</option><option value="draft">Rascunhos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select></label>
-              <label>Buscar imóvel<input aria-label="Buscar imóvel" onChange={(event) => setQueryInput(event.target.value)} placeholder="Rua, número ou família" type="search" value={queryInput} /></label>
+              <label>Buscar imóvel<input aria-label="Buscar imóvel" onChange={(event) => { requestedSelection.current = ""; setOpenedProperty(null); setQueryInput(event.target.value); }} placeholder="Rua, número ou família" type="search" value={queryInput} /></label>
               <label>Microrregião<select aria-label="Filtrar microrregião" onChange={(event) => { setPage(1); setMicroregionId(event.target.value); }} value={microregionId}><option value="">Todas as microrregiões</option>{reference?.microregions.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
               <label>Situação da cobertura<select aria-label="Filtrar cobertura" onChange={(event) => { setPage(1); setCoverage(event.target.value); }} value={coverage}><option value="">Todas as situações</option><option value="pending">Precisam de atenção</option><option value="overdue">Fora do prazo</option><option value="neverVisited">Nunca visitado</option><option value="covered">Em dia</option><option value="notConfigured">Sem regra configurada</option></select></label>
             </div>
@@ -497,7 +538,7 @@ export function PropertyWorkspace({
                   aria-pressed={item.id === selectedId}
                   className={item.id === selectedId ? "selected" : ""}
                   key={item.id}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => { requestedSelection.current = ""; setOpenedProperty(null); setSelectedId(item.id); }}
                   type="button"
                 >
                   <i

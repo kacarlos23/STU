@@ -105,6 +105,41 @@ describe('Acesso ao STU', () => {
     expect(screen.getByRole('button', { name: /Registrar visita/ })).toBeEnabled()
   })
 
+  it('abre a ficha do imóvel sem reutilizar o identificador como filtro das telas', async () => {
+    const propertyId = '66cd5d7d-274f-426b-90b3-f222e4713f1c'
+    const property = { id: propertyId, healthUnitId: 'unit-id', microregionId: 'micro-id', street: 'Rua vinculada', houseNumber: '66', familyNumber: '001', familyId: 'family-id', familyResponsibleName: 'Ana da Silva', familyConcurrencyToken: 'family-version', postalCode: null, complement: null, geometry: { type: 'Point', coordinates: [-39.7419, -17.5394] }, registrationStatus: 'Active', situation: 'Occupied', concurrencyToken: 'property-version', archivedAtUtc: null, lastVisitAtUtc: null, coverageStatus: 'neverVisited', tags: [] }
+    const family = { id: 'family-id', number: '001', responsibleName: 'Ana da Silva', healthUnitId: 'unit-id', concurrencyToken: 'family-version', archivedAtUtc: null, state: 'linked', coverageStatus: 'neverVisited', lastVisitAtUtc: null, currentProperty: { id: propertyId, street: property.street, houseNumber: property.houseNumber, concurrencyToken: property.concurrencyToken, situation: property.situation, startedAtUtc: '2026-09-20T12:00:00Z' } }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input)
+      const url = new URL(path, 'https://test.local')
+      if (path === '/api/auth/me') return Promise.resolve(jsonResponse(managerSession()))
+      if (path === '/api/dashboard/summary') return Promise.resolve(jsonResponse({ healthUnitName: 'UBS Piloto' }))
+      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
+      if (url.pathname === '/api/families') return Promise.resolve(jsonResponse({ items: [family], total: 1, page: 1, pageSize: 25 }))
+      if (path === '/api/families/family-id') return Promise.resolve(jsonResponse(family))
+      if (path === '/api/families/family-id/history') return Promise.resolve(jsonResponse({ links: [], versions: [] }))
+      if (path === '/api/families/family-id/visits') return Promise.resolve(jsonResponse([]))
+      if (url.pathname === '/api/properties' && url.search) return Promise.resolve(jsonResponse({ items: [property], total: 1, coverageSummary: { total: 1, covered: 0, overdue: 0, neverVisited: 1, notConfigured: 0 } }))
+      if (url.pathname === '/api/properties/reference-data') return Promise.resolve(jsonResponse({ selectedHealthUnitId: 'unit-id', microregions: [{ id: 'micro-id', code: 'MR01', name: 'Área vinculada', assignedAgentId: null, boundary: null }], tags: [], coverageRules: [] }))
+      if (path === `/api/properties/${propertyId}`) return Promise.resolve(jsonResponse(property))
+      if (path === `/api/properties/${propertyId}/visits` || path === `/api/properties/${propertyId}/versions` || path === `/api/properties/${propertyId}/families`) return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    }))
+
+    render(<App />)
+    const navigation = await screen.findByRole('navigation', { name: 'Navegação principal' })
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Famílias' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Família 001/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir ficha do imóvel' }))
+
+    expect(await screen.findByRole('heading', { name: 'Imóveis e cobertura' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar imóvel' })).toHaveValue('')
+    expect(await screen.findByRole('heading', { name: 'Rua vinculada, 66' })).toBeInTheDocument()
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Famílias' }))
+    expect(await screen.findByRole('searchbox', { name: 'Buscar família' })).toHaveValue('')
+  })
+
   it('explica a dependência territorial quando ainda não existe microrregião para o imóvel', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)

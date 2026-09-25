@@ -10,6 +10,7 @@ using NetTopologySuite.IO.Converters;
 using STU.Domain.Auditing;
 using STU.Domain.Operations;
 using STU.Domain.Properties;
+using STU.Infrastructure.Operations;
 using STU.Infrastructure.Persistence;
 
 namespace STU.Worker;
@@ -75,13 +76,14 @@ public sealed class OperationJobProcessor(StuDbContext db, IConfiguration config
         {
             case OperationFileFormat.Csv:
                 resultName = baseName + ".csv"; await File.WriteAllTextAsync(SafePath(resultName), BuildCsv(records), new UTF8Encoding(true), cancellationToken); break;
+            case OperationFileFormat.GeoJson:
+                resultName = baseName + ".geojson"; await File.WriteAllTextAsync(SafePath(resultName), BuildGeoJson(records), cancellationToken); break;
             case OperationFileFormat.Kml:
                 resultName = baseName + ".kml"; await File.WriteAllTextAsync(SafePath(resultName), BuildKml(records), new UTF8Encoding(false), cancellationToken); break;
             case OperationFileFormat.GeoPackage:
                 var intermediate = baseName + ".geojson"; await File.WriteAllTextAsync(SafePath(intermediate), BuildGeoJson(records), cancellationToken);
                 resultName = baseName + ".gpkg"; await ConvertToGeoPackageAsync(SafePath(intermediate), SafePath(resultName), cancellationToken); File.Delete(SafePath(intermediate)); break;
-            default:
-                resultName = baseName + ".geojson"; await File.WriteAllTextAsync(SafePath(resultName), BuildGeoJson(records), cancellationToken); break;
+            default: throw new InvalidDataException("Formato de exportação não suportado.");
         }
         job.Complete(resultName, records.Count); db.UserNotifications.Add(UserNotification.Create(job.CreatedByUserId, job.HealthUnitId, NotificationKind.OperationCompleted, "Exportação concluída", $"O arquivo {job.Format} com {records.Count} imóvel(is) está pronto.", "/operations"));
         await AddAuditAsync(job, "Complete", $"Exportação {job.Format} concluída com {records.Count} imóvel(is).", cancellationToken); await db.SaveChangesAsync(cancellationToken);
@@ -90,7 +92,13 @@ public sealed class OperationJobProcessor(StuDbContext db, IConfiguration config
     private async Task ValidateImportAsync(OperationJob job, CancellationToken cancellationToken)
     {
         if (job.SourceFileName is null) throw new InvalidDataException("Arquivo de origem não encontrado.");
-        var rows = job.Format == OperationFileFormat.Csv ? await ReadCsvAsync(SafePath(job.SourceFileName), cancellationToken) : await ReadGeoJsonAsync(SafePath(job.SourceFileName), cancellationToken);
+        var rows = job.Format switch
+        {
+            OperationFileFormat.Csv => await ReadCsvAsync(SafePath(job.SourceFileName), cancellationToken),
+            OperationFileFormat.Xlsx => ReadXlsx(SafePath(job.SourceFileName)),
+            OperationFileFormat.GeoJson => await ReadGeoJsonAsync(SafePath(job.SourceFileName), cancellationToken),
+            _ => throw new InvalidDataException("Formato de importação não suportado."),
+        };
         if (rows.Count is 0 or > 10000) throw new InvalidDataException("O arquivo deve conter entre 1 e 10.000 imóveis.");
         var microregions = await db.Microregions.Where(item => item.HealthUnitId == job.HealthUnitId && item.ArchivedAtUtc == null).ToListAsync(cancellationToken);
         var byCode = microregions.ToDictionary(item => item.Code, StringComparer.OrdinalIgnoreCase); var existingFamilies = await db.Families.AsNoTracking().Where(item => item.HealthUnitId == job.HealthUnitId).Select(item => item.Number).ToHashSetAsync(cancellationToken);
@@ -155,10 +163,32 @@ public sealed class OperationJobProcessor(StuDbContext db, IConfiguration config
         foreach (var line in lines.Skip(1).Where(value => !string.IsNullOrWhiteSpace(value)))
         {
             var values = ParseCsvLine(line); string Get(string name) { var index = Array.IndexOf(headers, name); return index >= 0 && index < values.Count ? values[index] : string.Empty; }
-            if (!double.TryParse(Get("longitude"), NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude) || !double.TryParse(Get("latitude"), NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude)) throw new InvalidDataException("CSV com longitude ou latitude inválida.");
+            if (!TryCoordinate(Get("longitude"), out var longitude) || !TryCoordinate(Get("latitude"), out var latitude)) throw new InvalidDataException("CSV com longitude ou latitude inválida.");
             var point = new Point(longitude, latitude) { SRID = 4326 }; rows.Add(new(Get("microregioncode"), Get("street"), Get("housenumber"), Get("familynumber"), Get("familyresponsiblename"), Get("postalcode"), Get("complement"), point, Default(Get("registrationstatus"), "Active"), Default(Get("situation"), "Occupied")));
         }
         return rows;
+    }
+
+    private static List<ImportRow> ReadXlsx(string path)
+    {
+        try
+        {
+            return PropertyImportWorkbook.ReadRows(path).Select(values =>
+            {
+                string Get(string name) => values.GetValueOrDefault(name) ?? string.Empty;
+                if (!TryCoordinate(Get("longitude"), out var longitude) || !TryCoordinate(Get("latitude"), out var latitude)) throw new InvalidDataException("Planilha Excel com longitude ou latitude inválida.");
+                var point = new Point(longitude, latitude) { SRID = 4326 };
+                return new ImportRow(Get("microregioncode"), Get("street"), Get("housenumber"), Get("familynumber"), Get("familyresponsiblename"), Get("postalcode"), Get("complement"), point, Default(Get("registrationstatus"), "Active"), Default(Get("situation"), "Occupied"));
+            }).ToList();
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidDataException("Não foi possível ler a planilha Excel. Baixe um novo modelo e preserve as colunas.", exception);
+        }
     }
 
     private static async Task<List<ImportRow>> ReadGeoJsonAsync(string path, CancellationToken cancellationToken)
@@ -189,6 +219,9 @@ public sealed class OperationJobProcessor(StuDbContext db, IConfiguration config
     private static string EnsureStorage(IConfiguration configuration) { var root = Path.GetFullPath(configuration["Operations:StoragePath"] ?? Path.Combine(AppContext.BaseDirectory, "operations-data")); Directory.CreateDirectory(root); return root; }
     private static JsonSerializerOptions CreateGeoJsonOptions() { var options = new JsonSerializerOptions(JsonSerializerDefaults.Web); options.Converters.Add(new GeoJsonConverterFactory()); return options; }
     private static List<string> ParseCsvLine(string line) { var values = new List<string>(); var current = new StringBuilder(); var quoted = false; for (var index = 0; index < line.Length; index++) { var character = line[index]; if (character == '"') { if (quoted && index + 1 < line.Length && line[index + 1] == '"') { current.Append('"'); index++; } else quoted = !quoted; } else if (character == ',' && !quoted) { values.Add(current.ToString()); current.Clear(); } else current.Append(character); } values.Add(current.ToString()); return values; }
+    private static bool TryCoordinate(string value, out double coordinate) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out coordinate) ||
+        double.TryParse(value, NumberStyles.Float, CultureInfo.GetCultureInfo("pt-BR"), out coordinate);
     private static string Csv(string? value) { var safe = value ?? string.Empty; if (safe.Length > 0 && "=+-@".Contains(safe[0])) safe = "'" + safe; return $"\"{safe.Replace("\"", "\"\"")}\""; }
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string Default(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
