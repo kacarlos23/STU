@@ -1,4 +1,4 @@
-/* Fields indicate keyboard focus with a fill instead of a selection border. */
+/* Keep the field's normal appearance when it receives focus. */
 input:focus,
 input:focus-visible,
 select:focus,
@@ -10,8 +10,9 @@ textarea:focus-visible {
   box-shadow: none !important;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  background-color: var(--color-lavender, #eee9ff) !important;
+/* Search icons and text share the same surface, including while typing. */
+.site-search input,
+.unit-users-search input,
+.registration-preview .preview-search input {
+  background-color: transparent !important;
 }
