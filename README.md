@@ -6,6 +6,8 @@ STU is a web-based territorial management system for Basic Health Units. The rep
 
 The repository has completed **Phase 6: operations and hardening** and prepared **Phase 7: capacity, accessibility, and controlled pilot readiness**. The platform supports UBS-scoped properties, structured visits, coverage alerts, operational indicators, notifications, asynchronous import/export, progressive MapLibre layers, audit, archive/restore workflows, and the isolated global administration portal. Backups, monitoring, an isolated recovery rehearsal, and the security release gate have been validated. The [independent family implementation](docs/families/IMPLEMENTATION.md) adds only a family number and responsible name, with optional residence, immutable link history and family-based visits. Individual members and clinical records are not collected. Its destructive data reset and production deployment have not been executed; see the [deployment procedure](docs/families/DEPLOYMENT.md).
 
+The operational interface follows [microregion → agent → address → family](docs/registration.md). Pre-implementation and pilot-release screens have been removed from both portal dashboards. The proposed UBS settings area is documented in the [settings plan](docs/settings/PLAN.md); its dedicated screen is not implemented yet.
+
 ## Published environment
 
 - Main STU interface: `https://stu.laudaapp.com`;

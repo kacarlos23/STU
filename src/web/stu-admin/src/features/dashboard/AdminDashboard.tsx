@@ -23,18 +23,8 @@ const NotificationCenter = lazy(async () => {
   return { default: module.NotificationCenter }
 })
 
-const OnboardingWorkspace = lazy(async () => {
-  const module = await import('@stu/shared/onboarding')
-  return { default: module.OnboardingWorkspace }
-})
-
-const PilotReleaseWorkspace = lazy(async () => {
-  const module = await import('@stu/shared/pilot-release')
-  return { default: module.PilotReleaseWorkspace }
-})
-
 type AdminOverview = { activeHealthUnits: number; activeUsers: number; pendingPasswordChanges: number; activeRoles: number }
-type Section = 'overview' | 'health-units' | 'territories' | 'coverage' | 'workflows' | 'onboarding' | 'pilot-release' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
+type Section = 'overview' | 'health-units' | 'territories' | 'coverage' | 'workflows' | 'users' | 'roles' | 'backups' | 'monitoring' | 'audit'
 
 const navigation: { id: Section; icon: string; label: string }[] = [
   { id: 'overview', icon: '⌂', label: 'Visão geral' },
@@ -42,8 +32,6 @@ const navigation: { id: Section; icon: string; label: string }[] = [
   { id: 'territories', icon: '◇', label: 'Mapa territorial' },
   { id: 'coverage', icon: '◫', label: 'Cobertura' },
   { id: 'workflows', icon: '⇄', label: 'Arquivos e dados' },
-  { id: 'onboarding', icon: '✓', label: 'Pré-implantação' },
-  { id: 'pilot-release', icon: '◆', label: 'Liberação do piloto' },
   { id: 'users', icon: '◎', label: 'Usuários' },
   { id: 'roles', icon: '◇', label: 'Funções e permissões' },
   { id: 'backups', icon: '↻', label: 'Backups' },
@@ -58,8 +46,6 @@ const areas: { section: Section; icon: string; title: string; description: strin
   { section: 'users', icon: '◎', title: 'Usuários', description: 'Crie contas, redefina senhas e transfira servidores.', action: 'Gerenciar usuários' },
   { section: 'roles', icon: '◇', title: 'Funções e permissões', description: 'Crie novas funções e determine cada permissão.', action: 'Configurar acessos' },
   { section: 'backups', icon: '↻', title: 'Backups', description: 'Execute cópias manuais e ajuste a rotina semanal.', action: 'Gerenciar backups' },
-  { section: 'onboarding', icon: '✓', title: 'Pré-implantação', description: 'Valide território, contas, importações e backup antes de autorizar uma UBS.', action: 'Verificar prontidão' },
-  { section: 'pilot-release', icon: '◆', title: 'Liberação do piloto', description: 'Consolide evidências, responsáveis e a decisão final de início operacional.', action: 'Avaliar liberação' },
   { section: 'monitoring', icon: '◉', title: 'Monitoramento', description: 'Acompanhe banco, worker, armazenamento e alertas operacionais.', action: 'Ver saúde do sistema' },
   { section: 'audit', icon: '≡', title: 'Auditoria', description: 'Consulte acréscimos e todas as modificações registradas.', action: 'Consultar registros' },
   { section: 'health-units', icon: '⇄', title: 'Importações', description: 'Importe limites e referências do OpenStreetMap.', action: 'Após cadastrar UBS' },
@@ -115,8 +101,6 @@ function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
         {section === 'territories' && <Suspense fallback={<div className="admin-error">Carregando o mapa…</div>}><TerritoryWorkspace global session={session} /></Suspense>}
         {section === 'coverage' && <Suspense fallback={<div className="admin-error">Carregando imóveis e cobertura…</div>}><PropertyWorkspace global onOpenTerritory={() => setSection('territories')} session={session} /></Suspense>}
         {section === 'workflows' && <Suspense fallback={<div className="admin-error">Carregando os fluxos operacionais…</div>}><OperationalWorkspace global session={session} /></Suspense>}
-        {section === 'onboarding' && <Suspense fallback={<div className="admin-error">Verificando a pré-implantação…</div>}><OnboardingWorkspace actions={{ territory: () => setSection('territories'), coverage: () => setSection('coverage'), operations: () => setSection('workflows'), users: () => setSection('users'), backups: () => setSection('backups') }} global session={session} /></Suspense>}
-        {section === 'pilot-release' && <Suspense fallback={<div className="admin-error">Conferindo a liberação…</div>}><PilotReleaseWorkspace actions={{ onboarding: () => setSection('onboarding'), operations: () => setSection('workflows'), backups: () => setSection('backups'), monitoring: () => setSection('monitoring') }} global session={session} /></Suspense>}
         {section === 'users' && <UsersManager currentUserId={session.id} onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'roles' && <RolesManager onChanged={() => setRefreshKey((value) => value + 1)} />}
         {section === 'backups' && <BackupsManager />}

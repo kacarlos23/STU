@@ -20,6 +20,28 @@ describe('Acesso ao STU', () => {
     expect(screen.getByLabelText('Senha')).toBeInTheDocument()
   })
 
+  it.each(['HealthUnitManager', 'GlobalAdministrator'])('remove as etapas do piloto da navegação desktop e móvel de %s', async role => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/api/auth/me') return Promise.resolve(jsonResponse({ ...managerSession(), roles: [{ name: role, displayName: role }], ...(role === 'GlobalAdministrator' ? { permissions: ['*'] } : {}) }))
+      if (path === '/api/dashboard/summary') return Promise.resolve(jsonResponse({ healthUnitName: 'UBS Piloto' }))
+      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await openSummary()
+    const navigation = screen.getByRole('navigation', { name: 'Navegação principal' })
+    expect(within(navigation).queryByText('Pré-implantação')).not.toBeInTheDocument()
+    expect(within(navigation).queryByText('Liberação do piloto')).not.toBeInTheDocument()
+    expect(within(navigation).getByRole('button', { name: 'Configurações (em breve)' })).toBeDisabled()
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Mais' }))
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: 'Servidores' })).toBeInTheDocument()
+    expect(within(menu).queryByRole('menuitem', { name: /Pré-implantação|Liberação do piloto/ })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([path]) => /api\/(onboarding|pilot-release)/.test(String(path)))).toBe(false)
+  })
+
   it('permite ao gerente consultar e iniciar o cadastro de servidores da própria UBS', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)

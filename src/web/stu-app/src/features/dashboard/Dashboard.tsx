@@ -7,8 +7,6 @@ const FamilyWorkspace = lazy(async () => ({ default: (await import('@stu/shared/
 const PropertyWorkspace = lazy(async () => ({ default: (await import('@stu/shared/properties')).PropertyWorkspace }))
 const OperationalWorkspace = lazy(async () => ({ default: (await import('@stu/shared/operations')).OperationalWorkspace }))
 const NotificationCenter = lazy(async () => ({ default: (await import('@stu/shared/notifications')).NotificationCenter }))
-const OnboardingWorkspace = lazy(async () => ({ default: (await import('@stu/shared/onboarding')).OnboardingWorkspace }))
-const PilotReleaseWorkspace = lazy(async () => ({ default: (await import('@stu/shared/pilot-release')).PilotReleaseWorkspace }))
 const HealthUnitUsersWorkspace = lazy(async () => ({ default: (await import('@stu/shared/health-unit-users')).HealthUnitUsersWorkspace }))
 const TerritoryOverviewMap = lazy(async () => ({ default: (await import('./TerritoryOverviewMap')).TerritoryOverviewMap }))
 const RegistrationWorkspace = lazy(async () => ({ default: (await import('../registration/RegistrationWorkspace')).RegistrationWorkspace }))
@@ -30,7 +28,7 @@ type DashboardSummary = {
   microregions: MicroregionSummary[]
   stage: string
 }
-type Section = 'registration' | 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
+type Section = 'registration' | 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users'
 type NavItem = { id: Section; label: string; icon: Parameters<typeof StuIcon>[0]['name']; management?: boolean }
 type WorkspaceRequest = { value: string; nonce: number }
 
@@ -131,17 +129,12 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
 
   const roleLabel = session.roles.map(role => role.displayName).join(', ')
   const firstName = session.displayName.trim().split(/\s+/)[0]
-  const canOnboard = session.roles.some(role => role.name === 'HealthUnitManager' || role.name === 'GlobalAdministrator')
   const canManageUsers = session.permissions.includes('*') || session.permissions.includes('health_unit.users.manage')
   const canViewFamilies = session.permissions.includes('*') || session.permissions.includes('families.view')
   const canViewRegistration = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('properties.view'))
   const canManageFamilies = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('families.manage'))
   const managementItems: NavItem[] = [
     ...(canManageUsers ? [{ id: 'users', label: 'Servidores', icon: 'users', management: true } as NavItem] : []),
-    ...(canOnboard ? [
-      { id: 'onboarding', label: 'Pré-implantação', icon: 'check', management: true } as NavItem,
-      { id: 'pilot-release', label: 'Liberação do piloto', icon: 'flag', management: true } as NavItem,
-    ] : []),
   ]
   const activeModule = moduleContext(section)
 
@@ -182,8 +175,6 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
           {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace consultationOnly coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('registration')} searchRequest={propertySearchRequest} onSearchHandled={nonce => setPropertySearchRequest(current => current?.nonce === nonce ? undefined : current)} selectionRequest={propertySelectionRequest} onSelectionHandled={nonce => setPropertySelectionRequest(current => current?.nonce === nonce ? undefined : current)} session={session} /></Suspense>}
           {section === 'operations' && <Suspense fallback={<WorkspaceSkeleton label="Carregando arquivos e dados" />}><OperationalWorkspace session={session} /></Suspense>}
           {section === 'users' && canManageUsers && <Suspense fallback={<WorkspaceSkeleton label="Carregando a equipe" />}><HealthUnitUsersWorkspace session={session} /></Suspense>}
-          {section === 'onboarding' && canOnboard && <Suspense fallback={<WorkspaceSkeleton label="Verificando a pré-implantação" />}><OnboardingWorkspace actions={{ territory: () => setSection('map'), coverage: () => openCoverage(''), operations: () => setSection('operations'), users: () => setSection('users') }} session={session} /></Suspense>}
-          {section === 'pilot-release' && canOnboard && <Suspense fallback={<WorkspaceSkeleton label="Conferindo a liberação" />}><PilotReleaseWorkspace actions={{ onboarding: () => setSection('onboarding'), operations: () => setSection('operations') }} session={session} /></Suspense>}
         </div>
       </main>
     </div>
@@ -281,7 +272,7 @@ function trendLabel(value: number | null | undefined) {
 }
 function initials(name: string) { return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') }
 function formatToday() { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date()) }
-function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'families' ? 'Famílias' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : section === 'onboarding' ? 'Preparação do piloto' : section === 'pilot-release' ? 'Decisão do piloto' : `Bom trabalho, ${firstName}.` }
+function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'families' ? 'Famílias' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : `Bom trabalho, ${firstName}.` }
 function moduleContext(section: Section): { title: string; description: string; icon: NavItem['icon'] } | null {
   if (section === 'registration') return { title: 'Cadastro territorial', description: 'Microrregião → Agente de saúde → Endereço → Família', icon: 'map' }
   if (section === 'map') return { title: 'Mapa territorial', description: 'Visualize as microrregiões, a cobertura e os limites do território da UBS.', icon: 'map' }
@@ -289,7 +280,5 @@ function moduleContext(section: Section): { title: string; description: string; 
   if (section === 'coverage') return { title: 'Cobertura', description: 'Consulte os imóveis, as visitas e a situação de cobertura da UBS.', icon: 'coverage' }
   if (section === 'operations') return { title: 'Arquivos e dados', description: 'Importe, exporte e acompanhe os dados operacionais da UBS.', icon: 'database' }
   if (section === 'users') return { title: 'Equipe da UBS', description: 'Gerencie os servidores, as funções e os acessos vinculados à UBS.', icon: 'users' }
-  if (section === 'onboarding') return { title: 'Pré-implantação', description: 'Acompanhe os requisitos necessários para iniciar a operação da UBS.', icon: 'check' }
-  if (section === 'pilot-release') return { title: 'Liberação do piloto', description: 'Confira as condições e registre a decisão de liberação do piloto.', icon: 'flag' }
   return null
 }

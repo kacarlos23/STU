@@ -107,77 +107,29 @@ describe('Acesso à administração global do STU', () => {
     expect(screen.getAllByText('Atenção')).toHaveLength(3)
   })
 
-  it('consolida as pendências da pré-implantação sem ativar dados automaticamente', async () => {
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+  it('remove menus e atalhos do piloto mantendo as áreas administrativas de operação', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
       if (path === '/api/auth/me') return Promise.resolve(jsonResponse({
         id: 'admin-id', userName: 'admin.global', displayName: 'Administrador', mustChangePassword: false,
         healthUnit: null, roles: [{ name: 'GlobalAdministrator', displayName: 'Administrador global' }], permissions: ['*'],
       }))
       if (path === '/api/admin/overview') return Promise.resolve(jsonResponse({ activeHealthUnits: 1, activeUsers: 2, pendingPasswordChanges: 0, activeRoles: 5 }))
-      if (path.startsWith('/api/admin/health-units')) return Promise.resolve(jsonResponse([{ id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto', archivedAtUtc: null }]))
-      if (path.startsWith('/api/onboarding/readiness')) return Promise.resolve(jsonResponse({
-        generatedAtUtc: '2026-08-31T12:00:00Z', snapshotHash: 'abc',
-        healthUnit: { id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto' },
-        counts: { neighborhoods: 2, microregions: 0, properties: 0, activeUsers: 1, temporaryPasswords: 0, healthAgents: 0, receptionists: 0, doctors: 0, managers: 1 },
-        importSummary: { beforeLatestImport: 0, latestImported: 0, currentTotal: 0, pendingImports: 0 },
-        backup: { scheduleEnabled: true, runId: null, completedAtUtc: null, sha256: null, sizeBytes: null, recent: false },
-        readyForApproval: false,
-        checks: [
-          { id: 'neighborhood-count', label: 'Três bairros vinculados', status: 'blocked', detail: '2 de 3 bairros vinculados.' },
-          { id: 'pending-imports', label: 'Sem importação pendente', status: 'passed', detail: '0 importações pendentes.' },
-        ],
-        latestApproval: null,
-      }))
       if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
       return Promise.resolve(new Response('{}', { status: 404 }))
-    }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Visão geral' })).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Pré-implantação' })[0])
-    expect(await screen.findByRole('heading', { level: 2, name: 'Pré-implantação da UBS' })).toBeInTheDocument()
-    expect(await screen.findByText('Existem pendências antes da aprovação')).toBeInTheDocument()
-    expect(screen.getAllByText('Três bairros vinculados')).not.toHaveLength(0)
-    expect(screen.getByRole('region', { name: 'Progresso da pré-implantação: 50%' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Resolver em Território' })).not.toHaveLength(0)
-    expect(screen.getByRole('button', { name: 'Aprovar pré-implantação' })).toBeDisabled()
-  })
-
-  it('exibe o portão final, os guias por função e mantém a liberação bloqueada', async () => {
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      const path = String(input)
-      if (path === '/api/auth/me') return Promise.resolve(jsonResponse({
-        id: 'admin-id', userName: 'admin.global', displayName: 'Administrador', mustChangePassword: false,
-        healthUnit: null, roles: [{ name: 'GlobalAdministrator', displayName: 'Administrador global' }], permissions: ['*'],
-      }))
-      if (path === '/api/admin/overview') return Promise.resolve(jsonResponse({ activeHealthUnits: 1, activeUsers: 2, pendingPasswordChanges: 0, activeRoles: 5 }))
-      if (path.startsWith('/api/admin/health-units')) return Promise.resolve(jsonResponse([{ id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto', archivedAtUtc: null }]))
-      if (path.startsWith('/api/pilot-release/readiness')) return Promise.resolve(jsonResponse({
-        generatedAtUtc: '2026-08-31T15:00:00Z', releaseSnapshotHash: 'release-hash', onboardingSnapshotHash: 'onboarding-hash',
-        healthUnit: { id: 'unit-id', code: 'UBS-PILOTO', name: 'UBS Piloto' }, readyForDecision: false, released: false,
-        checks: [
-          { id: 'capacity', label: 'Capacidade e desempenho', status: 'passed', detail: 'Ensaio aprovado.' },
-          { id: 'onboarding', label: 'Pré-implantação aprovada e atual', status: 'blocked', detail: 'Conclua a pré-implantação.' },
-        ],
-        evidence: [{ label: 'Capacidade', document: 'PHASE2_CAPACITY_REPORT_2026-08-28.md' }], latestDecision: null,
-      }))
-      if (path.startsWith('/api/notifications')) return Promise.resolve(jsonResponse({ items: [], unreadCount: 0 }))
-      return Promise.resolve(new Response('{}', { status: 404 }))
-    }))
-
-    render(<App />)
-
-    expect(await screen.findByRole('heading', { name: 'Visão geral' })).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Liberação do piloto' })[0])
-    expect(await screen.findByRole('heading', { level: 2, name: 'Liberação do piloto' })).toBeInTheDocument()
-    expect(await screen.findByText('Liberação bloqueada por pendências')).toBeInTheDocument()
-    expect(screen.getAllByText('Pré-implantação aprovada e atual')).not.toHaveLength(0)
-    expect(screen.getByRole('region', { name: 'Progresso da liberação: 50%' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Voltar à pré-implantação' })).not.toHaveLength(0)
-    expect(screen.getByText('Agente de saúde')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Registrar liberação' })).toBeDisabled()
+    expect(screen.queryByText('Pré-implantação')).not.toBeInTheDocument()
+    expect(screen.queryByText('Liberação do piloto')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Verificar prontidão|Avaliar liberação/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Backups' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Monitoramento' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Auditoria' })).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([path]) => /api\/(onboarding|pilot-release)/.test(String(path)))).toBe(false)
   })
 })
 
