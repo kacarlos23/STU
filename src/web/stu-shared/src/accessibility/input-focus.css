@@ -1,0 +1,17 @@
+/* Fields indicate keyboard focus with a fill instead of a selection border. */
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  background-color: var(--color-lavender, #eee9ff) !important;
+}
