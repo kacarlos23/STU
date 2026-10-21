@@ -138,13 +138,13 @@ public static class OnboardingEndpoints
             .ToListAsync(cancellationToken);
 
         var invalidNeighborhoods = neighborhoods.Count(item => item.Geometry.IsEmpty || !item.Geometry.IsValid || item.Geometry.SRID != 4326);
-        var invalidMicroregions = microregions.Count(item => item.Boundary.IsEmpty || !item.Boundary.IsValid || item.Boundary.SRID != 4326);
+        var invalidMicroregions = microregions.Count(item => item.Boundary != null && (item.Boundary.IsEmpty || !item.Boundary.IsValid || item.Boundary.SRID != 4326));
         var orphanMicroregions = microregions.Count(item => !links.Any(link => link.MicroregionId == item.Id && activeNeighborhoodIds.Contains(link.NeighborhoodId)));
         var unassignedMicroregions = microregions.Count(item => item.AssignedAgentId == null);
-        var overlapPairs = CountOverlaps(microregions.Select(item => (item.Id, Geometry: (Geometry)item.Boundary)).ToArray());
-        var (gapArea, outsideArea) = CoverageDifference(neighborhoods.Select(item => item.Geometry), microregions.Select(item => (Geometry)item.Boundary));
-        var boundaries = microregions.ToDictionary(item => item.Id, item => (Geometry)item.Boundary);
-        var propertiesOutside = properties.Count(item => !boundaries.TryGetValue(item.MicroregionId, out var boundary) || !boundary.Covers(item.Geometry));
+        var overlapPairs = CountOverlaps(microregions.Where(item => item.Boundary != null).Select(item => (item.Id, Geometry: (Geometry)item.Boundary!)).ToArray());
+        var (gapArea, outsideArea) = CoverageDifference(neighborhoods.Select(item => item.Geometry), microregions.Where(item => item.Boundary != null).Select(item => (Geometry)item.Boundary!));
+        var boundaries = microregions.Where(item => item.Boundary != null).ToDictionary(item => item.Id, item => (Geometry)item.Boundary!);
+        var propertiesOutside = properties.Count(item => item.Geometry != null && (!boundaries.TryGetValue(item.MicroregionId, out var boundary) || !boundary.Covers(item.Geometry)));
         var duplicateFamilies = (await db.Families.AsNoTracking().Where(f => f.HealthUnitId == unitId).Select(f => f.Number).ToListAsync(cancellationToken)).GroupBy(number => number, StringComparer.OrdinalIgnoreCase).Count(group => group.Count() > 1);
 
         var activeUsers = await db.Users.AsNoTracking()

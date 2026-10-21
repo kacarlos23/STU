@@ -31,7 +31,7 @@ describe('Acesso ao STU', () => {
       return Promise.resolve(new Response('{}', { status: 404 }))
     }))
 
-    render(<App />)
+    await openSummary()
     expect(await screen.findByRole('heading', { name: /Bom trabalho/ })).toBeInTheDocument()
     const navigation = screen.getByRole('navigation', { name: 'Navegação principal' })
     expect(within(navigation).getByRole('button', { name: 'Território' })).toBeInTheDocument()
@@ -81,7 +81,7 @@ describe('Acesso ao STU', () => {
       return Promise.resolve(new Response('{}', { status: 404 }))
     }))
 
-    render(<App />)
+    await openSummary()
     const nav = await screen.findByRole('navigation', { name: 'Navegação principal' })
     expect(within(nav).getAllByRole('button', { name: 'Cobertura' })).toHaveLength(1)
     expect(within(nav).queryByRole('button', { name: 'Imóveis' })).not.toBeInTheDocument()
@@ -126,9 +126,10 @@ describe('Acesso ao STU', () => {
       return Promise.resolve(new Response('{}', { status: 404 }))
     }))
 
-    render(<App />)
+    await openSummary()
     const navigation = await screen.findByRole('navigation', { name: 'Navegação principal' })
-    fireEvent.click(within(navigation).getByRole('button', { name: 'Famílias' }))
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Visão geral' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Famílias cadastradas/ }))
     fireEvent.click(await screen.findByRole('button', { name: /Família 001/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Abrir ficha do imóvel' }))
 
@@ -136,7 +137,8 @@ describe('Acesso ao STU', () => {
     expect(screen.getByRole('searchbox', { name: 'Buscar imóvel' })).toHaveValue('')
     expect(await screen.findByRole('heading', { name: 'Rua vinculada, 66' })).toBeInTheDocument()
 
-    fireEvent.click(within(navigation).getByRole('button', { name: 'Famílias' }))
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Visão geral' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Famílias cadastradas/ }))
     expect(await screen.findByRole('searchbox', { name: 'Buscar família' })).toHaveValue('')
   })
 
@@ -151,12 +153,12 @@ describe('Acesso ao STU', () => {
       return Promise.resolve(new Response('{}', { status: 404 }))
     }))
 
-    render(<App />)
+    await openSummary()
     expect(await screen.findByRole('heading', { name: /Bom trabalho/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Cobertura' }))
-    expect(await screen.findByRole('heading', { level: 3, name: 'Cadastre uma microrregião antes do primeiro imóvel' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Ir para o mapa territorial/ })).toBeEnabled()
-    expect(screen.getAllByRole('button', { name: /Cadastrar imóvel/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
+    expect(await screen.findByRole('heading', { level: 3, name: 'Cadastre uma microrregião antes do primeiro endereço' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Abrir microrregiões/ })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /Cadastrar imóvel/ })).not.toBeInTheDocument()
   })
 
   it('exibe tendências reais e bloqueia cadastro quando o navegador está offline', async () => {
@@ -169,7 +171,7 @@ describe('Acesso ao STU', () => {
       return Promise.resolve(new Response('{}', { status: 404 }))
     }))
 
-    render(<App />)
+    await openSummary()
     expect(await screen.findByText('+50% em relação ao mês anterior')).toBeInTheDocument()
     expect(screen.getByText(/Você está sem conexão/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Cadastrar família/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
@@ -189,7 +191,7 @@ describe('Acesso ao STU', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    await openSummary()
     fireEvent.click(await screen.findByRole('button', { name: /Alertas de cobertura: 2/ }))
     await screen.findByRole('heading', { name: 'Imóveis e cobertura' })
     expect(screen.getByLabelText('Filtrar cobertura')).toHaveValue('pending')
@@ -202,3 +204,8 @@ function managerSession() {
 }
 
 function jsonResponse(body: unknown) { return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }) }
+
+async function openSummary() {
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Visão geral' }))
+}

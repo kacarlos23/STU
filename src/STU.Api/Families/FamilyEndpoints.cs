@@ -114,8 +114,8 @@ public static partial class FamilyEndpoints
     {
         var actor = await ActorAsync(http, users); var unit = Unit(actor, http, healthUnitId); if (unit is null) return Results.Forbid();
         var items = db.Properties.AsNoTracking().Where(p => p.HealthUnitId == unit && p.ArchivedAtUtc == null && p.RegistrationStatus == PropertyRegistrationStatus.Active &&
-            !db.FamilyPropertyLinks.Any(l => l.PropertyId == p.Id && l.EndedAtUtc == null) && db.Microregions.Any(m => m.Id == p.MicroregionId && m.ArchivedAtUtc == null && m.Boundary.Covers(p.Geometry)));
-        if (http.User.IsInRole(SystemRoles.HealthAgent)) items = items.Where(p => db.Microregions.Any(m => m.Id == p.MicroregionId && m.AssignedAgentId == actor.Id));
+            !db.FamilyPropertyLinks.Any(l => l.PropertyId == p.Id && l.EndedAtUtc == null) && db.Microregions.Any(m => m.Id == p.MicroregionId && m.ArchivedAtUtc == null && (p.Geometry == null || (m.Boundary != null && m.Boundary.Covers(p.Geometry)))));
+        if (http.User.IsInRole(SystemRoles.HealthAgent)) items = items.Where(p => (p.MicroregionAgentId == null && db.Microregions.Any(m => m.Id == p.MicroregionId && m.AssignedAgentId == actor.Id)) || db.MicroregionAgents.Any(a => a.Id == p.MicroregionAgentId && a.AgentId == actor.Id && a.EndedAtUtc == null));
         if (!string.IsNullOrWhiteSpace(query)) { var term = "%" + query.Trim().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%"; items = items.Where(p => EF.Functions.ILike(p.Street, term) || EF.Functions.ILike(p.HouseNumber, term)); }
         page = Math.Clamp(page, 1, 1_000_000); pageSize = Math.Clamp(pageSize, 1, 100);
         return Results.Ok(new { total = await items.CountAsync(), page, pageSize, items = await items.OrderBy(p => p.Street).ThenBy(p => p.HouseNumber).Skip((page - 1) * pageSize).Take(pageSize).Select(p => new { p.Id, p.Street, p.HouseNumber, p.MicroregionId, p.ConcurrencyToken }).ToListAsync() });
@@ -134,7 +134,7 @@ public static partial class FamilyEndpoints
         if (property.ConcurrencyToken != request.ExpectedPropertyVersion) return Stale();
         if (property.IsArchived || property.RegistrationStatus != PropertyRegistrationStatus.Active) return Conflict("Imóvel indisponível", "Selecione um imóvel ativo.");
         if (!await db.HealthUnits.AnyAsync(u => u.Id == family.HealthUnitId && u.ArchivedAtUtc == null) ||
-            !await db.Microregions.AnyAsync(m => m.Id == property.MicroregionId && m.HealthUnitId == family.HealthUnitId && m.ArchivedAtUtc == null && m.Boundary.Covers(property.Geometry)))
+            !await db.Microregions.AnyAsync(m => m.Id == property.MicroregionId && m.HealthUnitId == family.HealthUnitId && m.ArchivedAtUtc == null && (property.Geometry == null || (m.Boundary != null && m.Boundary.Covers(property.Geometry)))))
             return Conflict("Vínculo territorial inválido", "O imóvel precisa estar dentro de uma microrregião ativa da UBS.");
         if (await db.FamilyPropertyLinks.AnyAsync(l => l.PropertyId == property.Id && l.EndedAtUtc == null)) return Conflict("Imóvel com família", "Este imóvel já possui uma família. Escolha um imóvel disponível.");
         var previous = await db.FamilyPropertyLinks.SingleOrDefaultAsync(l => l.FamilyId == id && l.EndedAtUtc == null);

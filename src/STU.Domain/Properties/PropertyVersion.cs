@@ -14,7 +14,10 @@ public sealed class PropertyVersion
     public string HouseNumber { get; private init; } = string.Empty;
     public string? PostalCode { get; private init; }
     public string? Complement { get; private init; }
-    public Geometry Geometry { get; private init; } = default!;
+    public Geometry? Geometry { get; private init; }
+    public Guid? MicroregionAgentId { get; private init; }
+    public Guid? NeighborhoodId { get; private init; }
+    public string? Reference { get; private init; }
     public PropertyRegistrationStatus RegistrationStatus { get; private init; }
     public PropertySituation Situation { get; private init; }
     public bool IsArchived { get; private init; }
@@ -26,7 +29,8 @@ public sealed class PropertyVersion
     {
         PropertyId=item.Id,VersionNumber=number,HealthUnitId=item.HealthUnitId,MicroregionId=item.MicroregionId,Street=item.Street,
         HouseNumber=item.HouseNumber,PostalCode=item.PostalCode,Complement=item.Complement,
-        Geometry=(Geometry)item.Geometry.Copy(),RegistrationStatus=item.RegistrationStatus,Situation=item.Situation,IsArchived=item.IsArchived,
+        Geometry=item.Geometry?.Copy(),MicroregionAgentId=item.MicroregionAgentId,NeighborhoodId=item.NeighborhoodId,Reference=item.Reference,
+        RegistrationStatus=item.RegistrationStatus,Situation=item.Situation,IsArchived=item.IsArchived,
         ChangeKind=kind,ChangedByUserId=actorId,
     };
 }

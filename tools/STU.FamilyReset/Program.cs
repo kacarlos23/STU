@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using STU.Infrastructure.Persistence;
 
@@ -20,7 +22,7 @@ await db.Database.OpenConnectionAsync();
 if ((await db.Database.GetAppliedMigrationsAsync()).Any(m => m.EndsWith("_IndependentFamilies", StringComparison.Ordinal)))
     throw new InvalidOperationException("O novo modelo já está implantado. Este utilitário não reinicia famílias existentes.");
 var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-if (pending.Length != 1 || !pending[0].EndsWith("_IndependentFamilies", StringComparison.Ordinal))
+if (pending.Length == 0 || !pending[0].EndsWith("_IndependentFamilies", StringComparison.Ordinal))
     throw new InvalidOperationException("A base deve estar na migração imediatamente anterior a IndependentFamilies.");
 string[] targets = ["properties", "property_visits", "property_versions", "property_tags", "operation_jobs"];
 string[] preserved = ["health_units", "neighborhoods", "microregions", "microregion_neighborhoods", "AspNetUsers", "AspNetRoles", "AspNetRoleClaims", "operational_tags", "coverage_rules", "backup_settings", "audit_entries"];
@@ -71,7 +73,7 @@ await using (var output = new FileStream(manifest, FileMode.CreateNew, FileAcces
     await output.WriteAsync(Encoding.UTF8.GetBytes(preview));
 // Migration owns the atomic transaction. It refuses deletion without this explicit connection-local flag.
 await db.Database.ExecuteSqlRawAsync("SET stu.allow_family_reset = 'on'");
-try { await db.Database.MigrateAsync(); }
+try { await db.GetService<IMigrator>().MigrateAsync(pending[0]); }
 finally { await db.Database.ExecuteSqlRawAsync("RESET stu.allow_family_reset"); }
 foreach (var path in filePaths) File.Delete(path);
 foreach (var table in preserved.Where(t => t is not ("audit_entries" or "AspNetRoleClaims")))

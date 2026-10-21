@@ -316,6 +316,7 @@ public static class AdministrationEndpoints
             return Validation("roleName", "Selecione uma função ativa.");
         }
 
+        if ((role.Name != SystemRoles.HealthAgent || request.HealthUnitId != user.HealthUnitId) && await dbContext.MicroregionAgents.AnyAsync(a => a.AgentId == id && a.EndedAtUtc == null)) return Conflict("Agente vinculado", "Desvincule o agente das microrregiões antes de alterar sua função ou UBS.");
         var healthUnitResult = await ValidateHealthUnitForRoleAsync(request.HealthUnitId, role, dbContext);
         if (healthUnitResult.Error is not null)
         {
@@ -425,6 +426,7 @@ public static class AdministrationEndpoints
 
         var roles = await userManager.GetRolesAsync(user);
         var before = UserSnapshot(user, roles.SingleOrDefault());
+        if (await dbContext.MicroregionAgents.AnyAsync(a => a.AgentId == id && a.EndedAtUtc == null)) return Conflict("Agente vinculado", "Desvincule o agente antes de arquivar sua conta.");
         user.Archive();
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
         var result = await userManager.UpdateAsync(user);

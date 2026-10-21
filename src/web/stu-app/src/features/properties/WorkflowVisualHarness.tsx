@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { Dashboard } from '../dashboard/Dashboard'
 import { InteractionProvider, type Session } from '@stu/shared'
 import { TerritoryComparison } from '../../../../stu-shared/src/territory/TerritoryComparison'
+import { exampleData } from '../registration-preview/data'
 import '../../styles/global.css'
 import '../../app/app.css'
 import '../../styles/purple-theme.css'
@@ -28,6 +29,8 @@ globalThis.fetch = async (input, init) => {
   if (!path.startsWith('/api/')) return originalFetch(input, init)
   if (init?.method && init.method !== 'GET') return Response.json({ detail: 'Demonstração local: nenhuma gravação é permitida.' }, { status: 403 })
   const url = new URL(path, location.origin)
+  if (url.pathname === '/api/registration/units') return Response.json([session.healthUnit])
+  if (url.pathname === '/api/registration') return Response.json(exampleData())
   if (url.pathname === '/api/families') {
     const state = url.searchParams.get('state'), query = url.searchParams.get('query')?.toLowerCase() ?? ''
     const items = familyRecords.filter(f => (state === 'all' || (state === 'active' ? !f.archivedAtUtc : f.state === state)) && `${f.number} ${f.responsibleName}`.toLowerCase().includes(query))
@@ -68,7 +71,7 @@ const visualView = new URLSearchParams(location.search).get('view')
 createRoot(document.getElementById('root')!).render(visualView === 'comparison'
   ? <InteractionProvider><TerritoryComparison before={boundary} after={after} validated onClose={() => location.assign('/workflow-visual-test.html')} /></InteractionProvider>
   : <Dashboard session={session} logout={async () => {}} />)
-const targetNavigation = visualView === 'families' ? 'Famílias' : visualView === 'map' || visualView === 'territory-editor' ? 'Território' : visualView === 'coverage' ? 'Cobertura' : visualView === 'users' ? 'Servidores' : visualView === 'operations' ? 'Arquivos e dados' : visualView === 'onboarding' ? 'Pré-implantação' : visualView === 'release' ? 'Liberação do piloto' : null
+const targetNavigation = visualView === 'families' || visualView === 'overview' ? 'Visão geral' : visualView === 'map' || visualView === 'territory-editor' ? 'Território' : visualView === 'coverage' ? 'Cobertura' : visualView === 'users' ? 'Servidores' : visualView === 'operations' ? 'Arquivos e dados' : visualView === 'onboarding' ? 'Pré-implantação' : visualView === 'release' ? 'Liberação do piloto' : null
 if (targetNavigation) window.setTimeout(() => {
   const targetButton = [...document.querySelectorAll<HTMLButtonElement>('nav button')].find(button => button.textContent?.includes(targetNavigation))
   targetButton?.click()
@@ -77,6 +80,10 @@ if (visualView === 'territory-editor') window.setTimeout(() => {
   const createButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Microrregião'))
   createButton?.click()
 }, 1800)
+if (visualView === 'families') window.setTimeout(() => {
+  const metric = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Famílias cadastradas'))
+  metric?.click()
+}, 500)
 if (visualView === 'families') window.setTimeout(() => {
   document.querySelector<HTMLButtonElement>('.family-row')?.click()
 }, 900)

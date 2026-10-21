@@ -31,7 +31,7 @@ internal sealed class MicroregionVersionConfiguration : IEntityTypeConfiguration
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Code).HasMaxLength(32).IsRequired();
         builder.Property(item => item.Name).HasMaxLength(160).IsRequired();
-        builder.Property(item => item.Boundary).HasColumnType("geometry(MultiPolygon,4326)").IsRequired();
+        builder.Property(item => item.Boundary).HasColumnType("geometry(MultiPolygon,4326)");
         builder.Property(item => item.Source).HasConversion<string>().HasMaxLength(32);
         builder.Property(item => item.NeighborhoodIds).HasColumnType("uuid[]").IsRequired();
         builder.Property(item => item.Color).HasMaxLength(7).IsRequired();

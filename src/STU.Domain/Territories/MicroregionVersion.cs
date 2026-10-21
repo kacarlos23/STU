@@ -13,7 +13,7 @@ public sealed class MicroregionVersion
     public Guid[] NeighborhoodIds { get; private init; } = [];
     public Guid HealthUnitId { get; private init; }
     public Guid? AssignedAgentId { get; private init; }
-    public MultiPolygon Boundary { get; private init; } = default!;
+    public MultiPolygon? Boundary { get; private init; }
     public TerritorySource Source { get; private init; }
     public string Color { get; private init; } = TerritoryColor.DefaultMicroregion;
     public bool IsArchived { get; private init; }
@@ -25,7 +25,7 @@ public sealed class MicroregionVersion
     {
         MicroregionId = item.Id, VersionNumber = versionNumber, Code = item.Code, Name = item.Name,
         NeighborhoodIds = neighborhoodIds.Distinct().Order().ToArray(), HealthUnitId = item.HealthUnitId, AssignedAgentId = item.AssignedAgentId,
-        Boundary = (MultiPolygon)item.Boundary.Copy(), Source = item.Source, Color = item.Color, IsArchived = item.IsArchived,
+        Boundary = (MultiPolygon?)item.Boundary?.Copy(), Source = item.Source, Color = item.Color, IsArchived = item.IsArchived,
         ChangeKind = changeKind, ChangedByUserId = actorId,
     };
 }

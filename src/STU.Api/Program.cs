@@ -16,6 +16,7 @@ using STU.Api.Monitoring;
 using STU.Api.Onboarding;
 using STU.Api.PilotRelease;
 using STU.Api.HealthUnitUsers;
+using STU.Api.Registration;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using NetTopologySuite.IO.Converters;
@@ -256,6 +257,7 @@ app.MapMonitoringEndpoints();
 app.MapOnboardingEndpoints();
 app.MapPilotReleaseEndpoints();
 app.MapHealthUnitUserEndpoints();
+app.MapRegistrationEndpoints();
 
 static bool HasPermission(System.Security.Claims.ClaimsPrincipal user, string permission) =>
     user.Claims.Any(claim => claim.Type == StuClaimTypes.Permission &&

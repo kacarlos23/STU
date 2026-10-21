@@ -11,6 +11,7 @@ const OnboardingWorkspace = lazy(async () => ({ default: (await import('@stu/sha
 const PilotReleaseWorkspace = lazy(async () => ({ default: (await import('@stu/shared/pilot-release')).PilotReleaseWorkspace }))
 const HealthUnitUsersWorkspace = lazy(async () => ({ default: (await import('@stu/shared/health-unit-users')).HealthUnitUsersWorkspace }))
 const TerritoryOverviewMap = lazy(async () => ({ default: (await import('./TerritoryOverviewMap')).TerritoryOverviewMap }))
+const RegistrationWorkspace = lazy(async () => ({ default: (await import('../registration/RegistrationWorkspace')).RegistrationWorkspace }))
 
 type CoverageSummary = { covered: number; overdue: number; neverVisited: number; notConfigured: number }
 type MicroregionSummary = { id: string; code: string; name: string; color: string; assigned: boolean; activeProperties: number; covered: number; alerts: number }
@@ -29,14 +30,14 @@ type DashboardSummary = {
   microregions: MicroregionSummary[]
   stage: string
 }
-type Section = 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
+type Section = 'registration' | 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'onboarding' | 'pilot-release'
 type NavItem = { id: Section; label: string; icon: Parameters<typeof StuIcon>[0]['name']; management?: boolean }
 type WorkspaceRequest = { value: string; nonce: number }
 
 const navigation: NavItem[] = [
+  { id: 'registration', label: 'Microrregiões', icon: 'map' },
   { id: 'overview', label: 'Visão geral', icon: 'home' },
   { id: 'map', label: 'Território', icon: 'map' },
-  { id: 'families', label: 'Famílias', icon: 'users' },
   { id: 'coverage', label: 'Cobertura', icon: 'coverage' },
   { id: 'operations', label: 'Arquivos e dados', icon: 'database' },
 ]
@@ -47,16 +48,16 @@ export function Dashboard(props: AuthenticatedContext) {
 
 function DashboardContent({ session, logout }: AuthenticatedContext) {
   const { guard } = useUiActions()
-  const [createRequest, setCreateRequest] = useState(0)
   const [headerSearch, setHeaderSearch] = useState('')
   const requestNonce = useRef(0)
   const [familySearchRequest, setFamilySearchRequest] = useState<WorkspaceRequest>()
+  const [familySelectionRequest, setFamilySelectionRequest] = useState<WorkspaceRequest>()
   const [propertySearchRequest, setPropertySearchRequest] = useState<WorkspaceRequest>()
   const [propertySelectionRequest, setPropertySelectionRequest] = useState<WorkspaceRequest>()
   const [propertyCoverageRequest, setPropertyCoverageRequest] = useState({ value: '', nonce: 0 })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [section, changeSection] = useState<Section>('overview')
+  const [section, changeSection] = useState<Section>(() => session.permissions.includes('*') || (session.permissions.includes('families.view') && session.permissions.includes('properties.view')) ? 'registration' : 'overview')
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const online = useOnlineStatus()
@@ -71,7 +72,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
     if (next !== section) void guard(() => changeSection(next))
   }
   function openCreate() {
-    void guard(() => { setCreateRequest(value => value + 1); changeSection('families') })
+    void guard(() => { changeSection('registration') })
   }
   function openCoverage(filter = '') {
     void guard(() => {
@@ -133,6 +134,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const canOnboard = session.roles.some(role => role.name === 'HealthUnitManager' || role.name === 'GlobalAdministrator')
   const canManageUsers = session.permissions.includes('*') || session.permissions.includes('health_unit.users.manage')
   const canViewFamilies = session.permissions.includes('*') || session.permissions.includes('families.view')
+  const canViewRegistration = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('properties.view'))
   const canManageFamilies = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('families.manage'))
   const managementItems: NavItem[] = [
     ...(canManageUsers ? [{ id: 'users', label: 'Servidores', icon: 'users', management: true } as NavItem] : []),
@@ -149,7 +151,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">STU</span><span className="brand-copy">Sistema Territorial<br />das UBS</span></div>
         <nav aria-label="Navegação principal">
-          {navigation.filter(item => item.id !== 'families' || canViewFamilies).map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
+          {navigation.filter(item => item.id !== 'registration' || canViewRegistration).map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
           {managementItems.map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
           <button aria-label="Configurações (em breve)" className="nav-item nav-item--management" disabled title="Disponível em breve" type="button"><span><StuIcon name="settings" /></span>Configurações</button>
           <div className="mobile-more" ref={mobileMore}>
@@ -173,10 +175,11 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
             <div className="header-actions">{section === 'overview' && canManageFamilies && <button className="primary-action" disabled={!online} onClick={openCreate} title={online ? undefined : 'Conecte-se para cadastrar uma família'} type="button"><StuIcon name="plus" size={18} /> Cadastrar família</button>}</div>
           </header>}
           {error && <div className="dashboard-error" role="alert">{error}</div>}
+          {section === 'registration' && canViewRegistration && <Suspense fallback={<WorkspaceSkeleton label="Carregando microrregiões" />}><RegistrationWorkspace session={session} onViewFamily={id => { setFamilySelectionRequest({ value: id, nonce: ++requestNonce.current }); changeSection('families') }} /></Suspense>}
           {section === 'overview' && <Overview openFamilies={canViewFamilies ? () => setSection('families') : undefined} canCreate={canManageFamilies} healthUnitId={session.healthUnit?.id} online={online} openCreate={openCreate} openCoverage={openCoverage} openMap={() => setSection('map')} summary={summary} />}
           {section === 'map' && <Suspense fallback={<WorkspaceSkeleton label="Carregando o mapa" />}><TerritoryWorkspace global={session.roles.some(role => role.name === 'GlobalAdministrator')} session={session} /></Suspense>}
-          {section === 'families' && canViewFamilies && <Suspense fallback={<WorkspaceSkeleton label="Carregando famílias" />}><FamilyWorkspace session={session} searchRequest={familySearchRequest} onSearchHandled={nonce => setFamilySearchRequest(current => current?.nonce === nonce ? undefined : current)} createRequest={createRequest} onOpenProperty={id => { setPropertySelectionRequest({ value: id, nonce: ++requestNonce.current }); changeSection('coverage') }} /></Suspense>}
-          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('map')} searchRequest={propertySearchRequest} onSearchHandled={nonce => setPropertySearchRequest(current => current?.nonce === nonce ? undefined : current)} selectionRequest={propertySelectionRequest} onSelectionHandled={nonce => setPropertySelectionRequest(current => current?.nonce === nonce ? undefined : current)} session={session} /></Suspense>}
+          {section === 'families' && canViewFamilies && <Suspense fallback={<WorkspaceSkeleton label="Carregando famílias" />}><FamilyWorkspace session={session} registrationMode selectionRequest={familySelectionRequest} onSelectionHandled={nonce => setFamilySelectionRequest(current => current?.nonce === nonce ? undefined : current)} searchRequest={familySearchRequest} onSearchHandled={nonce => setFamilySearchRequest(current => current?.nonce === nonce ? undefined : current)} onOpenProperty={id => { setPropertySelectionRequest({ value: id, nonce: ++requestNonce.current }); changeSection('coverage') }} /></Suspense>}
+          {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace consultationOnly coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('registration')} searchRequest={propertySearchRequest} onSearchHandled={nonce => setPropertySearchRequest(current => current?.nonce === nonce ? undefined : current)} selectionRequest={propertySelectionRequest} onSelectionHandled={nonce => setPropertySelectionRequest(current => current?.nonce === nonce ? undefined : current)} session={session} /></Suspense>}
           {section === 'operations' && <Suspense fallback={<WorkspaceSkeleton label="Carregando arquivos e dados" />}><OperationalWorkspace session={session} /></Suspense>}
           {section === 'users' && canManageUsers && <Suspense fallback={<WorkspaceSkeleton label="Carregando a equipe" />}><HealthUnitUsersWorkspace session={session} /></Suspense>}
           {section === 'onboarding' && canOnboard && <Suspense fallback={<WorkspaceSkeleton label="Verificando a pré-implantação" />}><OnboardingWorkspace actions={{ territory: () => setSection('map'), coverage: () => openCoverage(''), operations: () => setSection('operations'), users: () => setSection('users') }} session={session} /></Suspense>}
@@ -280,6 +283,7 @@ function initials(name: string) { return name.trim().split(/\s+/).slice(0, 2).ma
 function formatToday() { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date()) }
 function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'families' ? 'Famílias' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : section === 'onboarding' ? 'Preparação do piloto' : section === 'pilot-release' ? 'Decisão do piloto' : `Bom trabalho, ${firstName}.` }
 function moduleContext(section: Section): { title: string; description: string; icon: NavItem['icon'] } | null {
+  if (section === 'registration') return { title: 'Cadastro territorial', description: 'Microrregião → Agente de saúde → Endereço → Família', icon: 'map' }
   if (section === 'map') return { title: 'Mapa territorial', description: 'Visualize as microrregiões, a cobertura e os limites do território da UBS.', icon: 'map' }
   if (section === 'families') return { title: 'Famílias', description: 'Cadastre e acompanhe famílias, seus imóveis e visitas.', icon: 'users' }
   if (section === 'coverage') return { title: 'Cobertura', description: 'Consulte os imóveis, as visitas e a situação de cobertura da UBS.', icon: 'coverage' }

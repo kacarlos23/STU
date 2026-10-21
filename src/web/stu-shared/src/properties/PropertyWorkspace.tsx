@@ -1,3 +1,5 @@
+import { mutate } from '../http/mutate'
+export { mutate } from '../http/mutate'
 import {
   useCallback,
   useEffect,
@@ -109,6 +111,7 @@ const emptyPoint: [number, number] = [-39.7419, -17.5394];
 export function PropertyWorkspace({
   session,
   global = false,
+  consultationOnly = false,
   createRequest = 0,
   coverageRequest,
   onOpenTerritory,
@@ -119,6 +122,7 @@ export function PropertyWorkspace({
 }: {
   session: Session;
   global?: boolean;
+  consultationOnly?: boolean;
   createRequest?: number;
   coverageRequest?: PropertyCoverageRequest;
   onOpenTerritory?: () => void;
@@ -164,9 +168,9 @@ export function PropertyWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const canManageProperties =
-    global ||
+    !consultationOnly && (global ||
     session.permissions.includes("*") ||
-    session.permissions.includes("properties.manage");
+    session.permissions.includes("properties.manage"));
   const canViewFamilies = global || session.permissions.includes("*") || session.permissions.includes("families.view");
   const canViewVisits = canViewFamilies && (global || session.permissions.includes("*") || session.permissions.includes("visits.view"));
   const canManageVisits = canViewFamilies && (global || session.permissions.includes("*") || session.permissions.includes("visits.manage"));
@@ -513,8 +517,8 @@ export function PropertyWorkspace({
           </section>
           {reference && reference.microregions.length === 0 && (
             <section className="property-prerequisite" role="status">
-              <div><span>Etapa necessária</span><h3>Cadastre uma microrregião antes do primeiro imóvel</h3><p>Todo imóvel precisa pertencer a uma microrregião ativa. Desenhe ou importe o limite no mapa territorial e depois volte a esta tela.</p></div>
-              {onOpenTerritory && <button onClick={onOpenTerritory} type="button">Ir para o mapa territorial →</button>}
+              <div><span>Etapa necessária</span><h3>{consultationOnly ? "Cadastre uma microrregião antes do primeiro endereço" : "Cadastre uma microrregião antes do primeiro imóvel"}</h3><p>{consultationOnly ? "Abra Microrregiões e siga a sequência: microrregião, agente, endereço e família." : "Todo imóvel precisa pertencer a uma microrregião ativa. Desenhe ou importe o limite no mapa territorial e depois volte a esta tela."}</p></div>
+              {onOpenTerritory && <button onClick={onOpenTerritory} type="button">{consultationOnly ? "Abrir microrregiões" : "Ir para o mapa territorial"} →</button>}
             </section>
           )}
           <section className="property-filter-panel" aria-labelledby="property-filter-title">
@@ -1694,29 +1698,4 @@ function translateChange(value: string) {
 }
 function messageOf(value: unknown, fallback: string) {
   return value instanceof Error ? value.message : fallback;
-}
-export async function mutate(path: string, method: "POST" | "PUT", body?: unknown) {
-  if (!navigator.onLine)
-    throw new Error("Sem conexão. Reconecte-se antes de salvar imóveis ou visitas.");
-  const csrf = await fetch("/api/auth/csrf", { credentials: "include" });
-  if (!csrf.ok) throw new Error("Sua sessão precisa ser renovada.");
-  const { token } = (await csrf.json()) as { token: string };
-  const response = await fetch(path, {
-    method,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", "X-STU-CSRF": token },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const problem = (await response.json().catch(() => ({}))) as {
-      detail?: string;
-      errors?: Record<string, string[]>;
-    };
-    throw new Error(
-      problem.detail ??
-        Object.values(problem.errors ?? {})[0]?.[0] ??
-        "Não foi possível concluir a operação.",
-    );
-  }
-  return response.status === 204 ? null : await response.json();
 }

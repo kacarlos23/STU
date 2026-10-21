@@ -96,23 +96,33 @@ public static class HealthUnitUserEndpoints
     {
         var actor = await ActorAsync(http, userManager);
         if (!actor.HealthUnitId.HasValue) return Results.Forbid();
-        var validation = ValidateUser(request.UserName, request.DisplayName);
-        if (validation is not null) return validation;
-        var roleResult = await AssignableRoleAsync(request.RoleName, roleManager);
-        if (roleResult.Error is not null) return roleResult.Error;
-
-        var temporaryPassword = GenerateTemporaryPassword();
-        var user = ApplicationUser.Create(request.UserName!.Trim(), request.DisplayName!, actor.HealthUnitId.Value);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var created = await userManager.CreateAsync(user, temporaryPassword);
-        if (!created.Succeeded) return IdentityFailure(created);
-        var assigned = await userManager.AddToRoleAsync(user, roleResult.Role!.Name!);
-        if (!assigned.Succeeded) return IdentityFailure(assigned);
-        Audit(db, http, actor, "Create", user, roleResult.Role.Name!, $"Servidor {user.UserName} cadastrado na UBS.");
+        var provisioned = await ProvisionAsync(request.UserName, request.DisplayName, request.RoleName, actor.HealthUnitId.Value, actor, http, userManager, roleManager, db);
+        if (provisioned.Error is not null) return provisioned.Error;
+        var user = provisioned.User!;
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return Results.Created($"/api/health-unit-users/{user.Id}", new { userId = user.Id, userName = user.UserName, temporaryPassword });
+        return Results.Created($"/api/health-unit-users/{user.Id}", new { userId = user.Id, userName = user.UserName, temporaryPassword = provisioned.TemporaryPassword });
     }
+
+    // The caller owns the transaction, including the optional territorial link.
+    internal static async Task<ProvisionedUser> ProvisionAsync(string? userName, string? displayName, string? roleName, Guid unitId, ApplicationUser actor, HttpContext http, UserManager<ApplicationUser> users, RoleManager<ApplicationRole> roles, StuDbContext db)
+    {
+        var validation = ValidateUser(userName, displayName);
+        if (validation is not null) return new(null, null, validation);
+        var role = await AssignableRoleAsync(roleName, roles);
+        if (role.Error is not null) return new(null, null, role.Error);
+        var password = GenerateTemporaryPassword();
+        var user = ApplicationUser.Create(userName!, displayName!, unitId);
+        var created = await users.CreateAsync(user, password);
+        if (!created.Succeeded) return new(null, null, IdentityFailure(created));
+        var assigned = await users.AddToRoleAsync(user, role.Role!.Name!);
+        if (!assigned.Succeeded) return new(null, null, IdentityFailure(assigned));
+        Audit(db, http, actor, "Create", user, role.Role.Name!, $"Servidor {user.UserName} cadastrado na UBS.");
+        return new(user, password, null);
+    }
+
+    internal sealed record ProvisionedUser(ApplicationUser? User, string? TemporaryPassword, IResult? Error);
 
     private static async Task<IResult> UpdateUserAsync(
         Guid id,
@@ -132,6 +142,7 @@ public static class HealthUnitUserEndpoints
         var roleResult = await AssignableRoleAsync(request.RoleName, roleManager);
         if (roleResult.Error is not null) return roleResult.Error;
 
+        if (roleResult.Role!.Name != SystemRoles.HealthAgent && await db.MicroregionAgents.AnyAsync(a => a.AgentId == id && a.EndedAtUtc == null)) return Conflict("Agente vinculado", "Desvincule o agente das microrregiões antes de alterar sua função.");
         var currentRoles = await userManager.GetRolesAsync(target.User);
         var before = Snapshot(target.User, currentRoles.SingleOrDefault());
         target.User.UpdateProfile(request.DisplayName, actor.HealthUnitId);
@@ -189,6 +200,7 @@ public static class HealthUnitUserEndpoints
         if (target.Error is not null) return target.Error;
         var roleName = (await userManager.GetRolesAsync(target.User!)).SingleOrDefault();
         var before = Snapshot(target.User!, roleName);
+        if (await db.MicroregionAgents.AnyAsync(a => a.AgentId == id && a.EndedAtUtc == null)) return Conflict("Agente vinculado", "Desvincule o agente das microrregiões antes de arquivar sua conta.");
         target.User!.Archive();
         var updated = await userManager.UpdateAsync(target.User);
         if (!updated.Succeeded) return IdentityFailure(updated);

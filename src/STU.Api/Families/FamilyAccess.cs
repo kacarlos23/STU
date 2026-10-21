@@ -21,7 +21,9 @@ internal static class FamilyAccess
         if (principal.IsInRole(SystemRoles.HealthAgent))
             query = query.Where(f => !db.FamilyPropertyLinks.Any(l => l.FamilyId == f.Id && l.EndedAtUtc == null) ||
                 db.FamilyPropertyLinks.Any(l => l.FamilyId == f.Id && l.EndedAtUtc == null &&
-                    db.Properties.Any(p => p.Id == l.PropertyId && db.Microregions.Any(m => m.Id == p.MicroregionId && m.AssignedAgentId == actor.Id && m.ArchivedAtUtc == null))));
+                    db.Properties.Any(p => p.Id == l.PropertyId && db.Microregions.Any(m => m.Id == p.MicroregionId && m.ArchivedAtUtc == null) &&
+                        ((p.MicroregionAgentId.HasValue && db.MicroregionAgents.Any(a => a.Id == p.MicroregionAgentId && a.AgentId == actor.Id && a.EndedAtUtc == null)) ||
+                         (!p.MicroregionAgentId.HasValue && db.Microregions.Any(m => m.Id == p.MicroregionId && m.AssignedAgentId == actor.Id))))));
         return query;
     }
 
@@ -44,7 +46,11 @@ internal static class FamilyAccess
 
     internal static async Task<bool> CanUsePropertyAsync(HealthProperty property, ApplicationUser actor, ClaimsPrincipal principal, StuDbContext db) =>
         (principal.IsInRole(SystemRoles.GlobalAdministrator) || actor.HealthUnitId == property.HealthUnitId) &&
-        (!principal.IsInRole(SystemRoles.HealthAgent) || await db.Microregions.AnyAsync(m => m.Id == property.MicroregionId && m.AssignedAgentId == actor.Id && m.ArchivedAtUtc == null));
+        (!principal.IsInRole(SystemRoles.HealthAgent) ||
+            (await db.Microregions.AnyAsync(m => m.Id == property.MicroregionId && m.ArchivedAtUtc == null) &&
+             (property.MicroregionAgentId.HasValue
+                ? await db.MicroregionAgents.AnyAsync(a => a.Id == property.MicroregionAgentId && a.AgentId == actor.Id && a.EndedAtUtc == null)
+                : await db.Microregions.AnyAsync(m => m.Id == property.MicroregionId && m.AssignedAgentId == actor.Id))));
 
     internal sealed record CurrentFamily(Guid Id, string Number, string ResponsibleName, Guid LinkId, DateTimeOffset StartedAtUtc, Guid ConcurrencyToken, DateTimeOffset? LastVisitAtUtc);
 }

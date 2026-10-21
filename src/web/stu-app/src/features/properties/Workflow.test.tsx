@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PropertyWorkspace } from '../../../../stu-shared/src/properties/PropertyWorkspace'
 import { App } from '../../app/App'
 import { InteractionProvider } from '@stu/shared'
 import { TerritoryComparison, comparisonBounds } from '../../../../stu-shared/src/territory/TerritoryComparison'
@@ -69,7 +70,7 @@ async function openProperties() {
 
 describe('Melhorias operacionais', () => {
   it('busca o endereço ao clicar e preenche somente logradouro e CEP vazios', async () => {
-    await openProperties()
+    await openLegacyProperties()
     fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
     const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
@@ -82,7 +83,7 @@ describe('Melhorias operacionais', () => {
   })
 
   it('preserva endereço manual e exige confirmação para substituí-lo pela sugestão', async () => {
-    await openProperties()
+    await openLegacyProperties()
     fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
     const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
@@ -101,7 +102,7 @@ describe('Melhorias operacionais', () => {
 
   it('mantém o cadastro manual disponível quando a consulta falha', async () => {
     addressStatus = 503
-    await openProperties()
+    await openLegacyProperties()
     fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
     const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     await waitFor(() => expect(maps.length).toBeGreaterThan(0))
@@ -137,7 +138,7 @@ describe('Melhorias operacionais', () => {
   })
 
   it('abre o cadastro pelo atalho e protege o formulário ao fechar ou sair', async () => {
-    await openProperties()
+    await openLegacyProperties()
     fireEvent.click(await screen.findByRole('button', { name: /Cadastrar imóvel/ }))
     const editor = await screen.findByRole('dialog', { name: 'Cadastro do imóvel' })
     fireEvent.change(within(editor).getByLabelText('Logradouro'), { target: { value: 'Rua nova' } })
@@ -164,7 +165,7 @@ describe('Melhorias operacionais', () => {
     await screen.findByRole('heading', { name: 'Imóveis e cobertura' })
     expect(screen.getByLabelText('Filtrar cobertura')).toHaveValue('')
     expect(screen.getByLabelText('Situação do cadastro')).toHaveValue('active')
-    expect(screen.getByRole('button', { name: /Cadastrar imóvel/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Cadastrar imóvel/ })).not.toBeInTheDocument()
     const summary = screen.getByRole('region', { name: 'Resumo da cobertura' })
     await waitFor(() => expect(within(summary).getByRole('button', { name: '2 Precisam de atenção' })).toBeInTheDocument())
     fireEvent.click(within(summary).getByRole('button', { name: '2 Precisam de atenção' }))
@@ -200,3 +201,9 @@ describe('Melhorias operacionais', () => {
     expect(JSON.stringify(boundary)).toBe(original)
   })
 })
+
+async function openLegacyProperties() {
+  const session = await (await fetch('/api/auth/me')).json()
+  render(<InteractionProvider><PropertyWorkspace session={session} /></InteractionProvider>)
+  await screen.findByRole('heading', { name: 'Rua de teste, 12' })
+}

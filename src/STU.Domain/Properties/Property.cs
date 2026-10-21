@@ -19,7 +19,10 @@ public sealed class HealthProperty : Entity
     public string HouseNumber { get; private set; } = string.Empty;
     public string? PostalCode { get; private set; }
     public string? Complement { get; private set; }
-    public Geometry Geometry { get; private set; } = default!;
+    public Geometry? Geometry { get; private set; }
+    public Guid? MicroregionAgentId { get; private set; }
+    public Guid? NeighborhoodId { get; private set; }
+    public string? Reference { get; private set; }
     public PropertyRegistrationStatus RegistrationStatus { get; private set; }
     public PropertySituation Situation { get; private set; }
     public Guid ConcurrencyToken { get; private set; } = Guid.NewGuid();
@@ -38,6 +41,23 @@ public sealed class HealthProperty : Entity
     }
 
     public void Archive() { if (!IsArchived) { ArchivedAtUtc = DateTimeOffset.UtcNow; Touch(); } }
+    public static HealthProperty CreateAddress(Guid unitId, Guid microregionId, Guid assignmentId, Guid neighborhoodId, string street, string houseNumber, string? postalCode, string? complement, string? reference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(street); ArgumentException.ThrowIfNullOrWhiteSpace(houseNumber);
+        return new HealthProperty
+        {
+            HealthUnitId = unitId, MicroregionId = microregionId, MicroregionAgentId = assignmentId, NeighborhoodId = neighborhoodId,
+            Street = street.Trim(), HouseNumber = Normalize(houseNumber), PostalCode = Clean(postalCode), Complement = Clean(complement), Reference = Clean(reference),
+            RegistrationStatus = PropertyRegistrationStatus.Active, Situation = PropertySituation.Occupied,
+        };
+    }
+    public void UpdateAddress(Guid neighborhoodId, string street, string houseNumber, string? postalCode, string? complement, string? reference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(street); ArgumentException.ThrowIfNullOrWhiteSpace(houseNumber);
+        NeighborhoodId = neighborhoodId; Street = street.Trim(); HouseNumber = Normalize(houseNumber); PostalCode = Clean(postalCode);
+        Complement = Clean(complement); Reference = Clean(reference); Touch();
+    }
+    public void AssignAgent(Guid? assignmentId) { MicroregionAgentId = assignmentId; Touch(); }
     public void Restore() { if (IsArchived) { ArchivedAtUtc = null; Touch(); } }
     public void Touch() { UpdatedAtUtc = DateTimeOffset.UtcNow; ConcurrencyToken = Guid.NewGuid(); }
     private static void Validate(string street, string house, Geometry geometry) { ArgumentException.ThrowIfNullOrWhiteSpace(street); ArgumentException.ThrowIfNullOrWhiteSpace(house); ArgumentNullException.ThrowIfNull(geometry); }

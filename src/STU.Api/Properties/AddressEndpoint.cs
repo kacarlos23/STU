@@ -21,7 +21,7 @@ public static partial class PropertyEndpoints
         var scope = Scope(actor, http.User, micro.HealthUnitId);
         if (scope.Error is not null) return scope.Error;
         if (http.User.IsInRole(SystemRoles.HealthAgent) && micro.AssignedAgentId != actor.Id) return Results.Forbid();
-        if (!micro.Boundary.Covers(new Point(longitude, latitude) { SRID = 4326 }))
+        if (micro.Boundary is null || !micro.Boundary.Covers(new Point(longitude, latitude) { SRID = 4326 }))
             return Validation("coordinates", "Marque um ponto dentro da microrregião selecionada.");
         var result = await lookup.ReverseAsync(latitude, longitude, http.RequestAborted);
         if (result.Error == "busy")

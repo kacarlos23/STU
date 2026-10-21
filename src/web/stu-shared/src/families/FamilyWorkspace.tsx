@@ -29,7 +29,8 @@ async function read<T>(path: string): Promise<T> {
 function message(error: unknown) { return error instanceof Error ? error.message : 'Não foi possível concluir a operação.' }
 function date(value: string) { return new Date(value).toLocaleString('pt-BR') }
 
-export function FamilyWorkspace({ session, searchRequest, onSearchHandled, createRequest = 0, onOpenProperty }: {
+export function FamilyWorkspace({ session, searchRequest, onSearchHandled, createRequest = 0, onOpenProperty, selectionRequest, onSelectionHandled, registrationMode = false }: {
+  selectionRequest?: { value: string; nonce: number }; onSelectionHandled?: (nonce: number) => void; registrationMode?: boolean
   session: Session; searchRequest?: { value: string; nonce: number }; onSearchHandled?: (nonce: number) => void; createRequest?: number; onOpenProperty?: (id: string) => void
 }) {
   const { confirm, guard } = useUiActions()
@@ -61,6 +62,8 @@ export function FamilyWorkspace({ session, searchRequest, onSearchHandled, creat
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const detailHeading = useRef<HTMLHeadingElement>(null)
+  const handledSelection = useRef(0)
+  useEffect(() => { if (selectionRequest && selectionRequest.nonce !== handledSelection.current) { handledSelection.current = selectionRequest.nonce; setSelectedId(selectionRequest.value); onSelectionHandled?.(selectionRequest.nonce) } }, [selectionRequest, onSelectionHandled])
   const handledCreate = useRef(0)
   const handledSearch = useRef(0)
 
@@ -158,7 +161,7 @@ export function FamilyWorkspace({ session, searchRequest, onSearchHandled, creat
   }
 
   return <section className="families-workspace" aria-label="Famílias">
-    <header className="families-heading"><div><span className="section-kicker">Acompanhamento da UBS</span><h2>Famílias</h2><p>Encontre a família pelo número ou responsável e acompanhe seu vínculo residencial.</p></div>{canManage && <button className="property-primary" disabled={!unitId || busy} onClick={() => setEditor('new')} type="button">Cadastrar família</button>}</header>
+    <header className="families-heading"><div><span className="section-kicker">Acompanhamento da UBS</span><h2>Famílias</h2><p>Encontre a família pelo número ou responsável e acompanhe seu vínculo residencial.</p></div>{canManage && !registrationMode && <button className="property-primary" disabled={!unitId || busy} onClick={() => setEditor('new')} type="button">Cadastrar família</button>}</header>
     {global && <label className="families-unit">UBS<select value={unitId} onChange={e => { setUnitId(e.target.value); setSelectedId(''); setPage(1) }}>{units.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>}
     <div className="families-filters"><label>Buscar família<input type="search" placeholder="Número ou nome do responsável" value={query} onChange={e => { setQuery(e.target.value); setPage(1) }} /></label><label>Situação<select value={state} onChange={e => { setState(e.target.value); setPage(1) }}><option value="active">Ativas</option><option value="linked">Com imóvel</option><option value="unlinked">Sem imóvel</option><option value="archived">Arquivadas</option><option value="all">Todas</option></select></label><button disabled={loading || busy} onClick={reload} type="button">Atualizar</button></div>
     {error && <p className="property-message property-error" role="alert">{error}</p>}{notice && <p className="property-message" role="status">{notice}</p>}
@@ -174,7 +177,7 @@ export function FamilyWorkspace({ session, searchRequest, onSearchHandled, creat
           {canManage && <div className="family-actions">{!selected.archivedAtUtc && <button disabled={busy} onClick={() => setEditor(selected)} type="button">Editar família</button>}<button disabled={busy || Boolean(selected.currentProperty)} onClick={() => void changeArchive()} type="button">{selected.archivedAtUtc ? 'Reativar família' : 'Arquivar família'}</button></div>}
           {canManage && selected.currentProperty && <p className="family-hint">Para arquivar, encerre primeiro o vínculo com o imóvel.</p>}
           <section className="family-residence"><h3>Imóvel atual</h3>{selected.currentProperty ? <><strong>{selected.currentProperty.street}, nº {selected.currentProperty.houseNumber}</strong><p>Vinculada desde {date(selected.currentProperty.startedAtUtc!)}</p>{canViewProperties && onOpenProperty && <button type="button" onClick={() => onOpenProperty(selected.currentProperty!.id)}>Abrir ficha do imóvel</button>}</> : <p>Esta família ainda não possui imóvel e está fora do cálculo territorial de cobertura.</p>}
-            {canManage && !selected.archivedAtUtc && <div className="family-actions">{canViewProperties && <button className="property-primary" disabled={busy} type="button" onClick={() => setLinking(true)}>{selected.currentProperty ? 'Alterar imóvel' : 'Vincular imóvel'}</button>}{selected.currentProperty && <button className="family-unlink-button" disabled={busy} type="button" onClick={() => void unlink()}>Encerrar vínculo</button>}</div>}
+            {canManage && !registrationMode && !selected.archivedAtUtc && <div className="family-actions">{canViewProperties && <button className="property-primary" disabled={busy} type="button" onClick={() => setLinking(true)}>{selected.currentProperty ? 'Alterar imóvel' : 'Vincular imóvel'}</button>}{selected.currentProperty && <button className="family-unlink-button" disabled={busy} type="button" onClick={() => void unlink()}>Encerrar vínculo</button>}</div>}
           </section>
           <section className="family-coverage"><h3>Acompanhamento</h3><strong>{coverage[selected.coverageStatus] ?? selected.coverageStatus}</strong><p>{selected.lastVisitAtUtc ? `Última visita: ${date(selected.lastVisitAtUtc)}` : 'Nenhuma visita ativa registrada.'}</p>{canManageVisits && selected.currentProperty && !selected.archivedAtUtc && <button className="property-primary" disabled={busy} type="button" onClick={() => setVisitEditor('new')}>Registrar visita</button>}</section>
           <section><h3>Histórico de imóveis</h3>{!history.links.length && <p>Nenhum vínculo residencial registrado.</p>}<ol className="family-timeline">{history.links.map(item => <li key={item.id}><strong>{item.street}, nº {item.houseNumber}</strong><span>{date(item.startedAtUtc)} — {item.endedAtUtc ? date(item.endedAtUtc) : 'Atual'}</span></li>)}</ol></section>

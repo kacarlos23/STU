@@ -15,7 +15,10 @@ internal sealed class PropertyConfiguration : IEntityTypeConfiguration<HealthPro
         });b.HasKey(x=>x.Id);b.HasAlternateKey(x=>new{x.Id,x.HealthUnitId});
         b.Property(x=>x.Street).HasMaxLength(180).IsRequired();b.Property(x=>x.HouseNumber).HasMaxLength(32).IsRequired();
         b.Property(x=>x.PostalCode).HasMaxLength(16);b.Property(x=>x.Complement).HasMaxLength(120);
-        b.Property(x=>x.Geometry).HasColumnType("geometry(Geometry,4326)").IsRequired();b.Property(x=>x.RegistrationStatus).HasConversion<string>().HasMaxLength(24);b.Property(x=>x.Situation).HasConversion<string>().HasMaxLength(24);b.Property(x=>x.ConcurrencyToken).IsConcurrencyToken();
+        b.Property(x=>x.Geometry).HasColumnType("geometry(Geometry,4326)");b.Property(x=>x.RegistrationStatus).HasConversion<string>().HasMaxLength(24);b.Property(x=>x.Situation).HasConversion<string>().HasMaxLength(24);b.Property(x=>x.ConcurrencyToken).IsConcurrencyToken();
+        b.Property(x=>x.Reference).HasMaxLength(180);
+        b.HasOne<STU.Domain.Territories.MicroregionAgent>().WithMany().HasForeignKey(x=>new{x.MicroregionAgentId,x.HealthUnitId,x.MicroregionId}).HasPrincipalKey(x=>new{x.Id,x.HealthUnitId,x.MicroregionId}).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<STU.Domain.Territories.Neighborhood>().WithMany().HasForeignKey(x=>x.NeighborhoodId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(x=>x.MicroregionId);b.HasIndex(x=>x.Geometry).HasMethod("gist");
         b.HasOne<STU.Domain.HealthUnits.HealthUnit>().WithMany().HasForeignKey(x=>x.HealthUnitId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<STU.Domain.Territories.Microregion>().WithMany().HasForeignKey(x=>x.MicroregionId).OnDelete(DeleteBehavior.Restrict);

@@ -11,10 +11,11 @@ internal sealed class MicroregionConfiguration : IEntityTypeConfiguration<Micror
         builder.ToTable("microregions", table =>
             table.HasCheckConstraint("CK_microregions_Color", "\"Color\" ~ '^#[0-9a-f]{6}$'"));
         builder.HasKey(item => item.Id);
+        builder.HasAlternateKey(item => new { item.Id, item.HealthUnitId });
         builder.Property(item => item.Code).HasMaxLength(32).IsRequired();
         builder.Property(item => item.Name).HasMaxLength(160).IsRequired();
         builder.Property(item => item.NormalizedName).HasMaxLength(160).IsRequired();
-        builder.Property(item => item.Boundary).HasColumnType("geometry(MultiPolygon,4326)").IsRequired();
+        builder.Property(item => item.Boundary).HasColumnType("geometry(MultiPolygon,4326)");
         builder.Property(item => item.Source).HasConversion<string>().HasMaxLength(32);
         builder.Property(item => item.Color).HasMaxLength(7).IsRequired();
         builder.Property(item => item.ConcurrencyToken).IsConcurrencyToken();

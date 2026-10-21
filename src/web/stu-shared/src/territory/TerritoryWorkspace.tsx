@@ -96,9 +96,11 @@ const baseStyle = {
 export function TerritoryWorkspace({
   session,
   global = false,
+  consultationOnly = false,
 }: {
   session: Session;
   global?: boolean;
+  consultationOnly?: boolean;
 }) {
   const { guard, confirm } = useUiActions();
   const [formDirty, setFormDirty] = useState(false);
@@ -153,10 +155,10 @@ export function TerritoryWorkspace({
     Boolean(editor),
     cancel,
   );
-  const canManage =
+  const canManage = !consultationOnly && (
     global ||
     session.permissions.includes("*") ||
-    session.permissions.includes("territory.manage");
+    session.permissions.includes("territory.manage"));
   const canViewProperties =
     global ||
     session.permissions.includes("*") ||

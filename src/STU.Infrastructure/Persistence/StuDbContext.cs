@@ -24,6 +24,7 @@ public sealed class StuDbContext(DbContextOptions<StuDbContext> options)
     public DbSet<Microregion> Microregions => Set<Microregion>();
 
     public DbSet<MicroregionNeighborhood> MicroregionNeighborhoods => Set<MicroregionNeighborhood>();
+    public DbSet<MicroregionAgent> MicroregionAgents => Set<MicroregionAgent>();
 
     public DbSet<NeighborhoodVersion> NeighborhoodVersions => Set<NeighborhoodVersion>();
 
