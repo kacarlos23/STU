@@ -272,6 +272,8 @@ body,
 
 @media (min-width: 761px) {
   .sidebar { background-color: #23043e; }
+  .sidebar nav { margin-left: -.5rem; }
+  .sidebar nav .nav-item { border-radius: 0 .38rem .38rem 0; padding-left: 1.9rem; }
 }
 
 @media (max-width: 760px) {
