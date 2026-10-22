@@ -112,11 +112,11 @@ function LoginScreen({ portal, initialError, onAuthenticated }: LoginScreenProps
   }
 
   return (
-    <main className={`stu-auth-page ${isAdmin ? 'stu-auth-page--admin' : ''}`}>
+    <main className={`stu-auth-page stu-auth-page--login ${isAdmin ? 'stu-auth-page--admin' : ''}`}>
       <section className="stu-auth-story" aria-label="Apresentação do STU">
         <div className="stu-auth-brand">
-          <span className="stu-auth-brand-mark">STU</span>
-          <span>Sistema Territorial das UBS</span>
+          <img src="/brand/v1/symbol.png" alt="" width={60} height={74} />
+          <span><strong>STU</strong>Sistema Territorial das UBS</span>
         </div>
         <div className="stu-auth-story-copy">
           <span className="stu-auth-kicker">{isAdmin ? 'Administração global' : 'Território em uma só visão'}</span>
@@ -134,7 +134,7 @@ function LoginScreen({ portal, initialError, onAuthenticated }: LoginScreenProps
 
       <section className="stu-auth-form-panel">
         <form className="stu-auth-card" onSubmit={(event) => void submit(event)}>
-          <div className="stu-auth-mobile-brand">STU</div>
+          <div className="stu-auth-mobile-brand"><img src="/brand/v1/symbol.png" alt="" width={48} height={60} /><span><strong>STU</strong><small>Sistema Territorial das UBS</small></span></div>
           <span className="stu-auth-kicker">Acesso seguro</span>
           <h2>Entre na sua conta</h2>
           <p className="stu-auth-help">

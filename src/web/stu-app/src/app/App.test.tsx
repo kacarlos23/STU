@@ -15,7 +15,7 @@ describe('Acesso ao STU', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Entre na sua conta' })).toBeInTheDocument()
-    expect(screen.getByText('Sistema Territorial das UBS')).toBeInTheDocument()
+    expect(screen.getAllByText('Sistema Territorial das UBS').length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Usuário')).toBeInTheDocument()
     expect(screen.getByLabelText('Senha')).toBeInTheDocument()
   })

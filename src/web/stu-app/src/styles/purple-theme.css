@@ -258,3 +258,24 @@ body,
     color: #5836c8;
   }
 }
+
+.dashboard {
+  background: linear-gradient(#f8f5ff88, #f8f5ff88), url('/brand/v1/dashboard.png') center top / cover fixed #f8f5ff;
+}
+
+.sidebar .brand { align-items: center; flex-direction: row; gap: 12px; padding: 0 12px 24px; }
+.sidebar .brand-mark { background: none; border-radius: 0; flex: none; height: 54px; width: 42px; }
+.brand-mark img { display: block; object-fit: contain; }
+.brand-copy strong { color: #fff; display: block; font-size: 24px; letter-spacing: .03em; line-height: 1.2; }
+.brand-copy small { color: #eee6ff; display: block; font-size: 10px; font-weight: 500; line-height: 1.4; }
+.brand-mobile-logo { display: none; }
+
+@media (min-width: 761px) {
+  .sidebar { background-color: #23043e; }
+}
+
+@media (max-width: 760px) {
+  .dashboard { background-attachment: scroll; background-position: top right; background-size: auto, 1920px auto; }
+  .unit-context { padding-left: 34px; position: relative; }
+  .brand-mobile-logo { display: block; left: 0; object-fit: contain; position: absolute; top: 2px; }
+}

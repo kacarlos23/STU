@@ -86,7 +86,7 @@ function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
   return (
     <><a className="skip-link" href="#admin-main-content">Ir para o conteúdo principal</a><div className="admin-workspace">
       <aside className="admin-sidebar">
-        <div className="admin-brand"><span>STU</span><strong>Administração global</strong></div>
+        <div className="admin-brand"><span><img src="/brand/v1/symbol.png" alt="" width={44} height={54} /></span><strong><b>STU</b>Administração global</strong></div>
         <nav aria-label="Navegação administrativa">
           {navigation.map((item) => <button aria-current={item.id === section ? 'page' : undefined} className={item.id === section ? 'admin-nav-active' : ''} key={item.id} onClick={() => navigate(item.id)} type="button"><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
         </nav>

@@ -5,7 +5,7 @@ body,
 }
 
 .admin-sidebar {
-  background: #241336;
+  background: #23043e;
   color: #f8f7fb;
 }
 
@@ -178,4 +178,17 @@ body,
 
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   box-shadow: 0 0 0 3px rgba(109, 74, 255, .28) !important;
+}
+
+.admin-main {
+  background: linear-gradient(#f8f5ff88, #f8f5ff88), url('/brand/v1/dashboard.png') center top / cover fixed #f8f5ff;
+}
+
+.admin-brand > span { background: none; flex: none; height: 54px; width: 44px; }
+.admin-brand img { display: block; object-fit: contain; }
+.admin-brand strong { font-size: 12px; }
+.admin-brand strong b { color: #fff; display: block; font-size: 24px; line-height: 1.3; }
+
+@media (max-width: 760px) {
+  .admin-main { background-position: top right; background-size: auto, 1920px auto; }
 }
