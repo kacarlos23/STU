@@ -13,6 +13,9 @@ internal sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Ap
             .HasMaxLength(160)
             .IsRequired();
 
+        builder.Property(user => user.AppearancePreference).HasMaxLength(5).HasDefaultValue("light").IsRequired();
+        builder.Property(user => user.ProfilePhotoVersion).HasMaxLength(32);
+
         builder.HasOne<HealthUnit>()
             .WithMany()
             .HasForeignKey(user => user.HealthUnitId)

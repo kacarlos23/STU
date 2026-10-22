@@ -18,5 +18,6 @@ public sealed record SessionResponse(
     bool MustChangePassword,
     HealthUnitResponse? HealthUnit,
     IReadOnlyList<RoleResponse> Roles,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    string? AvatarUrl = null);
 

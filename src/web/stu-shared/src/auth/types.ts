@@ -19,11 +19,13 @@ export type Session = {
   healthUnit: HealthUnit | null
   roles: Role[]
   permissions: string[]
+  avatarUrl?: string | null
 }
 
 export type AuthenticatedContext = {
   session: Session
   logout: () => Promise<void>
+  updateSession?: (session: Session) => void
 }
 
 export type ProblemDetails = {

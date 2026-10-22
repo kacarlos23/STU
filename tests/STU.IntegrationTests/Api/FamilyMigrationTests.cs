@@ -29,13 +29,15 @@ public sealed class FamilyMigrationTests
         await db.GetService<IMigrator>().MigrateAsync("20260902201258_ActiveMicroregionIdentifiers");
         var unit = HealthUnit.Create("RESET", "UBS Preservada");
         var user = ApplicationUser.Create("reset.test", "Usuário preservado", unit.Id, mustChangePassword: false);
+        db.HealthUnits.Add(unit); await db.SaveChangesAsync();
+        await HistoricalUserSeed.InsertAsync(db, user);
         var role = ApplicationRole.CreateCustom("reset-role", "Perfil preservado", null); role.Id = Guid.NewGuid();
         var gf = new GeometryFactory(new PrecisionModel(), 4326);
         var boundary = gf.CreateMultiPolygon([gf.CreatePolygon([new(-40,-18),new(-39,-18),new(-39,-17),new(-40,-17),new(-40,-18)])]);
         var neighborhood = Neighborhood.Create("Bairro preservado", boundary, TerritorySource.Manual);
         var micro = Microregion.Create("RESET-M", "Área preservada", unit.Id, null, boundary, TerritorySource.Manual);
         var tag = OperationalTag.Create(unit.Id, "Etiqueta preservada", "#abcdef");
-        db.HealthUnits.Add(unit); db.Users.Add(user); db.Roles.Add(role); db.Neighborhoods.Add(neighborhood); db.Microregions.Add(micro);
+        db.Roles.Add(role); db.Neighborhoods.Add(neighborhood); db.Microregions.Add(micro);
         db.MicroregionNeighborhoods.Add(MicroregionNeighborhood.Create(micro.Id, neighborhood.Id)); db.OperationalTags.Add(tag); db.CoverageRules.Add(CoverageRule.Create(unit.Id, micro.Id, 90)); db.BackupSettings.Add(BackupSettings.CreateDefault());
         db.RoleClaims.Add(new IdentityRoleClaim<Guid> { RoleId = role.Id, ClaimType = StuClaimTypes.Permission, ClaimValue = StuPermissions.PropertiesView });
         var approval = AuditEntry.Create(user.Id, "reset.test", "Approve", "OnboardingReview", unit.Id.ToString(), "Aprovação anterior preservada", null, "{}", null); db.AuditEntries.Add(approval);

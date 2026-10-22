@@ -81,7 +81,7 @@ export function AuthGate({ portal, requiredRole, children }: AuthGateProps) {
     )
   }
 
-  return children({ session, logout: handleLogout })
+  return children({ session, logout: handleLogout, updateSession: setSession })
 }
 
 type LoginScreenProps = {

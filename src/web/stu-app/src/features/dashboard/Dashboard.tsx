@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
-import { InteractionProvider, useUiActions, type AuthenticatedContext } from '@stu/shared'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { InteractionProvider, UserAvatar, useUiActions, type AuthenticatedContext } from '@stu/shared'
+import type { AccountSettings } from '@stu/shared/account-settings'
 import { StuIcon } from './StuIcon'
 
 const TerritoryWorkspace = lazy(async () => ({ default: (await import('@stu/shared/territory')).TerritoryWorkspace }))
@@ -10,6 +11,7 @@ const NotificationCenter = lazy(async () => ({ default: (await import('@stu/shar
 const HealthUnitUsersWorkspace = lazy(async () => ({ default: (await import('@stu/shared/health-unit-users')).HealthUnitUsersWorkspace }))
 const TerritoryOverviewMap = lazy(async () => ({ default: (await import('./TerritoryOverviewMap')).TerritoryOverviewMap }))
 const RegistrationWorkspace = lazy(async () => ({ default: (await import('../registration/RegistrationWorkspace')).RegistrationWorkspace }))
+const AccountSettingsWorkspace = lazy(async () => ({ default: (await import('@stu/shared/account-settings')).AccountSettingsWorkspace }))
 
 type CoverageSummary = { covered: number; overdue: number; neverVisited: number; notConfigured: number }
 type MicroregionSummary = { id: string; code: string; name: string; color: string; assigned: boolean; activeProperties: number; covered: number; alerts: number }
@@ -28,13 +30,13 @@ type DashboardSummary = {
   microregions: MicroregionSummary[]
   stage: string
 }
-type Section = 'registration' | 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users'
+type Section = 'registration' | 'overview' | 'map' | 'families' | 'coverage' | 'operations' | 'users' | 'settings'
 type NavItem = { id: Section; label: string; icon: Parameters<typeof StuIcon>[0]['name']; management?: boolean }
 type WorkspaceRequest = { value: string; nonce: number }
 
 const navigation: NavItem[] = [
-  { id: 'registration', label: 'Microrregiões', icon: 'map' },
   { id: 'overview', label: 'Visão geral', icon: 'home' },
+  { id: 'registration', label: 'Microrregiões', icon: 'map' },
   { id: 'map', label: 'Território', icon: 'map' },
   { id: 'coverage', label: 'Cobertura', icon: 'coverage' },
   { id: 'operations', label: 'Arquivos e dados', icon: 'database' },
@@ -44,7 +46,9 @@ export function Dashboard(props: AuthenticatedContext) {
   return <InteractionProvider key={`${props.session.id}:${props.session.healthUnit?.id ?? 'global'}`}><DashboardContent {...props} /></InteractionProvider>
 }
 
-function DashboardContent({ session, logout }: AuthenticatedContext) {
+function DashboardContent({ session: providedSession, logout, updateSession }: AuthenticatedContext) {
+  const [accountProfile, setAccountProfile] = useState<AccountSettings | null>(null)
+  const session = accountProfile ? { ...providedSession, displayName: accountProfile.displayName, avatarUrl: accountProfile.avatarUrl } : providedSession
   const { guard } = useUiActions()
   const [headerSearch, setHeaderSearch] = useState('')
   const requestNonce = useRef(0)
@@ -55,7 +59,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const [propertyCoverageRequest, setPropertyCoverageRequest] = useState({ value: '', nonce: 0 })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [section, changeSection] = useState<Section>(() => session.permissions.includes('*') || (session.permissions.includes('families.view') && session.permissions.includes('properties.view')) ? 'registration' : 'overview')
+  const [section, changeSection] = useState<Section>('overview')
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const online = useOnlineStatus()
@@ -64,9 +68,12 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const profileMenu = useRef<HTMLDivElement>(null)
   const profileMenuTrigger = useRef<HTMLButtonElement>(null)
   const previousSection = useRef<Section>('overview')
+  const sidebarNavigation = useRef<HTMLElement>(null)
+  const selectionIndicator = useRef<HTMLDivElement>(null)
 
   function setSection(next: Section) {
     setMobileMoreOpen(false)
+    setProfileMenuOpen(false)
     if (next !== section) void guard(() => changeSection(next))
   }
   function openCreate() {
@@ -135,18 +142,42 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
   const canManageFamilies = canViewFamilies && (session.permissions.includes('*') || session.permissions.includes('families.manage'))
   const managementItems: NavItem[] = [
     ...(canManageUsers ? [{ id: 'users', label: 'Servidores', icon: 'users', management: true } as NavItem] : []),
+    { id: 'settings', label: 'Configurações', icon: 'settings', management: true },
   ]
   const activeModule = moduleContext(section)
+
+  useLayoutEffect(() => {
+    const nav = sidebarNavigation.current, indicator = selectionIndicator.current
+    if (!nav || !indicator) return
+    function position() {
+      const button = nav!.querySelector<HTMLButtonElement>('button[aria-current="page"]')
+      if (!button || !button.offsetHeight) { indicator!.style.opacity = '0'; return }
+      indicator!.style.height = `${button.offsetHeight}px`
+      indicator!.style.transform = `translateY(${button.offsetTop}px)`
+      indicator!.style.opacity = '1'
+    }
+    position()
+    const frame = window.requestAnimationFrame?.(() => { indicator.dataset.ready = 'true' })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(position)
+    observer?.observe(nav)
+    window.addEventListener('resize', position)
+    return () => { if (frame !== undefined) window.cancelAnimationFrame?.(frame); observer?.disconnect(); window.removeEventListener('resize', position) }
+  }, [section, canManageUsers, canViewRegistration])
+
+  function profileSaved(profile: AccountSettings) {
+    const updated = { ...session, displayName: profile.displayName, avatarUrl: profile.avatarUrl }
+    setAccountProfile(profile); updateSession?.(updated)
+  }
 
   return <>
     <a className="skip-link" href="#main-content">Ir para o conteúdo principal</a>
     <div className="workspace">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark"><img src="/brand/v1/symbol.png" alt="" width={42} height={54} /></span><span className="brand-copy"><strong>STU</strong><small>Sistema Territorial<br />das UBS</small></span></div>
-        <nav aria-label="Navegação principal">
+        <button aria-label="Ir para a visão geral" className="brand brand-home" onClick={() => setSection('overview')} type="button"><span className="brand-mark"><img src="/brand/v1/symbol.png" alt="" width={42} height={54} /></span><span className="brand-copy"><strong>STU</strong><small>Sistema Territorial<br />das UBS</small></span></button>
+        <nav aria-label="Navegação principal" ref={sidebarNavigation}>
+          <div aria-hidden="true" className="sidebar-selection" ref={selectionIndicator} />
           {navigation.filter(item => item.id !== 'registration' || canViewRegistration).map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
           {managementItems.map(item => <NavigationButton current={section} item={item} key={item.id} select={setSection} />)}
-          <button aria-label="Configurações (em breve)" className="nav-item nav-item--management" disabled title="Disponível em breve" type="button"><span><StuIcon name="settings" /></span>Configurações</button>
           <div className="mobile-more" ref={mobileMore}>
             <button aria-controls="mobile-more-menu" aria-expanded={mobileMoreOpen} aria-haspopup="menu" className={managementItems.some(item => item.id === section) ? 'nav-item nav-item--active' : 'nav-item'} onClick={() => { setProfileMenuOpen(false); setMobileMoreOpen(value => !value) }} type="button"><span><StuIcon name="more" /></span>Mais</button>
             {mobileMoreOpen && <div className="mobile-more-menu" id="mobile-more-menu" role="menu">{managementItems.map(item => <button key={item.id} onClick={() => setSection(item.id)} role="menuitem" type="button"><StuIcon name={item.icon} />{item.label}</button>)}<button onClick={() => { setMobileMoreOpen(false); void guard(() => { void logout() }) }} role="menuitem" type="button"><StuIcon name="logout" />Sair</button></div>}
@@ -156,15 +187,15 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
         <div className="sidebar-signature"><span>Território,<br />mais saúde<br />para todos.</span><i /></div>
       </aside>
       <main className={`dashboard${section === 'overview' ? ' dashboard--overview' : ''}${section === 'map' ? ' dashboard--map' : ''}`} id="main-content">
-        <header className={`site-header${activeModule ? ' site-header--module' : ''}`}>
+        <header className={`site-header${activeModule ? ' site-header--module' : ''}${section === 'overview' ? ' site-header--overview' : ''}`}>
           {activeModule ? <div className="module-page-context"><span><StuIcon name={activeModule.icon} size={22} /></span><div><h1 ref={pageHeading} tabIndex={-1}>{activeModule.title}</h1><p>{activeModule.description}</p></div></div> : <div className="unit-context"><img className="brand-mobile-logo" src="/brand/v1/symbol.png" alt="STU" width={24} height={32} /><span><strong>{summary?.healthUnitName ?? session.healthUnit?.name ?? 'Administração global'}</strong><StuIcon name="chevron" size={13} /></span><small>{session.healthUnit?.code ? `${session.healthUnit.code} · Município de Teixeira de Freitas` : 'Município de Teixeira de Freitas'}</small></div>}
-          {!activeModule && <form aria-label="Busca geral" className="site-search" onSubmit={submitHeaderSearch}><button aria-label="Buscar famílias" type="submit"><StuIcon name="search" size={17} /></button><input aria-label="Buscar família por número ou responsável" onChange={event => setHeaderSearch(event.target.value)} placeholder="Buscar família por número ou responsável..." type="search" value={headerSearch} /></form>}
-          <div className="site-header-tools"><div className="site-notifications"><Suspense fallback={null}><NotificationCenter /></Suspense></div><div className={`site-profile${profileMenuOpen ? ' site-profile--open' : ''}`} ref={profileMenu}><button aria-controls="site-profile-menu" aria-expanded={profileMenuOpen} aria-haspopup="menu" aria-label="Menu do usuário" className="site-profile-trigger" onClick={() => { setMobileMoreOpen(false); setProfileMenuOpen(value => !value) }} ref={profileMenuTrigger} type="button"><span className="avatar">{initials(session.displayName)}</span><span className="site-profile-copy"><strong>{session.displayName}</strong><small>{roleLabel}</small></span><StuIcon name="chevron" size={14} /></button>{profileMenuOpen && <div className="site-profile-menu" id="site-profile-menu" role="menu"><button onClick={() => { setProfileMenuOpen(false); void guard(() => { void logout() }) }} role="menuitem" type="button"><StuIcon name="logout" size={17} />Sair do STU</button></div>}</div></div>
+          {section === 'overview' && <form aria-label="Busca geral" className="site-search" onSubmit={submitHeaderSearch}><button aria-label="Buscar famílias" type="submit"><StuIcon name="search" size={17} /></button><input aria-label="Buscar família por número ou responsável" onChange={event => setHeaderSearch(event.target.value)} placeholder="Buscar família por número ou responsável..." type="search" value={headerSearch} /></form>}
+          <div className="site-header-tools"><div className="site-notifications"><Suspense fallback={null}><NotificationCenter onNavigate={link => { if (link.startsWith('/users') && canManageUsers) setSection('users'); else if (link === '/settings') setSection('settings') }} /></Suspense></div><div className={`site-profile${profileMenuOpen ? ' site-profile--open' : ''}`} ref={profileMenu}><button aria-controls="site-profile-menu" aria-expanded={profileMenuOpen} aria-haspopup="menu" aria-label="Menu do usuário" className="site-profile-trigger" onClick={() => { setMobileMoreOpen(false); setProfileMenuOpen(value => !value) }} ref={profileMenuTrigger} type="button"><UserAvatar name={session.displayName} src={session.avatarUrl} /><span className="site-profile-copy"><strong>{session.displayName}</strong><small>{roleLabel}</small></span><StuIcon name="chevron" size={14} /></button>{profileMenuOpen && <div className="site-profile-menu" id="site-profile-menu" role="menu"><button onClick={() => setSection('settings')} role="menuitem" type="button"><StuIcon name="settings" size={17} />Configurações</button><button onClick={() => { setProfileMenuOpen(false); void guard(() => { void logout() }) }} role="menuitem" type="button"><StuIcon name="logout" size={17} />Sair do STU</button></div>}</div></div>
         </header>
         <div className={`dashboard-content${section === 'overview' ? ' dashboard-content--overview' : ''}${section === 'map' ? ' dashboard-content--map' : ''}`}>
           {!online && <div className="connectivity-banner" role="status"><StuIcon name="warning" /><span><strong>Você está sem conexão.</strong> A consulta e o envio de informações estão temporariamente indisponíveis.</span></div>}
           {section === 'overview' && <header className="dashboard-header">
-            <div><span className="breadcrumb">{section === 'overview' ? formatToday() : 'Operação territorial'}</span><h1 ref={pageHeading} tabIndex={-1}>{sectionTitle(section, firstName)}</h1><p>{summary?.healthUnitName ?? session.healthUnit?.name ?? 'Administração global'}</p></div>
+            <div><span className="breadcrumb">{section === 'overview' ? formatToday() : 'Operação territorial'}</span><h2>{sectionTitle(section, firstName)}</h2><p>{summary?.healthUnitName ?? session.healthUnit?.name ?? 'Administração global'}</p></div>
             <div className="header-actions">{section === 'overview' && canManageFamilies && <button className="primary-action" disabled={!online} onClick={openCreate} title={online ? undefined : 'Conecte-se para cadastrar uma família'} type="button"><StuIcon name="plus" size={18} /> Cadastrar família</button>}</div>
           </header>}
           {error && <div className="dashboard-error" role="alert">{error}</div>}
@@ -175,6 +206,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
           {section === 'coverage' && <Suspense fallback={<WorkspaceSkeleton label="Carregando imóveis e cobertura" />}><PropertyWorkspace consultationOnly coverageRequest={propertyCoverageRequest} onOpenTerritory={() => setSection('registration')} searchRequest={propertySearchRequest} onSearchHandled={nonce => setPropertySearchRequest(current => current?.nonce === nonce ? undefined : current)} selectionRequest={propertySelectionRequest} onSelectionHandled={nonce => setPropertySelectionRequest(current => current?.nonce === nonce ? undefined : current)} session={session} /></Suspense>}
           {section === 'operations' && <Suspense fallback={<WorkspaceSkeleton label="Carregando arquivos e dados" />}><OperationalWorkspace session={session} /></Suspense>}
           {section === 'users' && canManageUsers && <Suspense fallback={<WorkspaceSkeleton label="Carregando a equipe" />}><HealthUnitUsersWorkspace session={session} /></Suspense>}
+          {section === 'settings' && <Suspense fallback={<WorkspaceSkeleton label="Carregando configurações" />}><AccountSettingsWorkspace onSaved={profileSaved} /></Suspense>}
         </div>
       </main>
     </div>
@@ -182,7 +214,7 @@ function DashboardContent({ session, logout }: AuthenticatedContext) {
 }
 
 function NavigationButton({ current, item, select }: { current: Section; item: NavItem; select: (section: Section) => void }) {
-  return <button aria-current={item.id === current ? 'page' : undefined} className={`${item.id === current ? 'nav-item nav-item--active' : 'nav-item'}${item.management ? ' nav-item--management' : ''}`} onClick={() => select(item.id)} type="button"><span><StuIcon name={item.icon} /></span>{item.label}</button>
+  return <button aria-current={item.id === current ? 'page' : undefined} className={`${item.id === current ? 'nav-item nav-item--active' : 'nav-item'}${item.management ? ' nav-item--management' : ''}`} onClick={() => select(item.id)} type="button"><span><StuIcon name={item.icon} /></span><span className="nav-item-label">{item.label}</span></button>
 }
 
 function SidebarTopography() {
@@ -270,10 +302,11 @@ function trendLabel(value: number | null | undefined) {
   if (value === 0) return 'mesmo volume do mês anterior'
   return `${value > 0 ? '+' : ''}${value}% em relação ao mês anterior`
 }
-function initials(name: string) { return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join('') }
 function formatToday() { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date()) }
 function sectionTitle(section: Section, firstName: string) { return section === 'map' ? 'Território da UBS' : section === 'families' ? 'Famílias' : section === 'coverage' ? 'Cobertura' : section === 'operations' ? 'Arquivos e dados' : section === 'users' ? 'Equipe da UBS' : `Bom trabalho, ${firstName}.` }
 function moduleContext(section: Section): { title: string; description: string; icon: NavItem['icon'] } | null {
+  if (section === 'overview') return { title: 'Visão geral', description: 'Acompanhe o território, as famílias e a cobertura da UBS.', icon: 'home' }
+  if (section === 'settings') return { title: 'Configurações', description: 'Gerencie seu perfil, segurança e preferências.', icon: 'settings' }
   if (section === 'registration') return { title: 'Cadastro territorial', description: 'Microrregião → Agente de saúde → Endereço → Família', icon: 'map' }
   if (section === 'map') return { title: 'Mapa territorial', description: 'Visualize as microrregiões, a cobertura e os limites do território da UBS.', icon: 'map' }
   if (section === 'families') return { title: 'Famílias', description: 'Cadastre e acompanhe famílias, seus imóveis e visitas.', icon: 'users' }

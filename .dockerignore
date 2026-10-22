@@ -11,5 +11,6 @@ data
 backups
 exports
 logs
+output
 docs
 tests

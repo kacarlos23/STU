@@ -1,6 +1,16 @@
 # Configurações da UBS — plano de implementação
 
-Status: proposta para revisão, em 21/10/2026. A tela de Configurações ainda não foi implementada; o item lateral continua identificado como disponível em breve.
+Status: proposta institucional para revisão, em 21/10/2026. O plano de UBS abaixo permanece futuro. A tela de Configurações da conta foi entregue separadamente em 22/10/2026, conforme o escopo a seguir.
+
+## Configurações da conta — entrega de 22/10/2026
+
+Disponível pelo menu lateral, pelo menu do usuário e por Mais no celular. Cada usuário edita apenas seu próprio nome, foto e preferência Claro/Escuro. A preferência fica gravada, mas a aplicação visual do tema será implementada posteriormente. Salvar é explícito; cancelar restaura os valores carregados e sair com alterações pede confirmação. Conflitos entre sessões preservam o preenchimento e exigem recarregar.
+
+As fotos PNG/JPG/WebP são recortadas no navegador para PNG de 256 × 256 pixels. A API valida conteúdo, dimensões e tamanho; a imagem é privada à conta autenticada e não entra no cache do service worker. Login, UBS, funções e permissões não são editáveis nesse formulário.
+
+O botão de senha envia um pedido interno aos gerentes ativos da própria UBS. Pedidos de gerentes e unidades sem gerente ativo seguem para a administração global. O pedido pendente não se duplica; o responsável recebe notificação e utiliza a redefinição existente na gestão de usuários. Ao atender, a pendência é encerrada, o solicitante recebe um aviso e o próximo acesso exige a troca da senha temporária. Nenhuma senha é enviada em notificações.
+
+A migração adiciona somente os campos de perfil, preferência e pendência de senha, preservando usuários e vínculos. As gravações usam autenticação, CSRF, concorrência e auditoria existentes. Testes cobrem privacidade da foto, validação, concorrência, proteção de UBS/funções e o ciclo de pedido/atendimento.
 
 ## Alteração entregue nesta etapa
 
@@ -82,9 +92,9 @@ Não permitir excluir códigos, mudar seu significado ou renumerá-los. Opções
 4. Executar `scripts/verify.ps1`, revisar migrações, publicar os serviços afetados e confirmar ambos os portais e os endpoints de saúde em produção.
 5. Implementar a aba Visitas como entrega posterior, com testes próprios de histórico e compatibilidade de importação/exportação.
 
-## Base conferida no código atual
+## Base conferida no código em 21/10/2026
 
-- `src/web/stu-app/src/features/dashboard/Dashboard.tsx`: Configurações ainda é um item desabilitado.
+- `src/web/stu-app/src/features/dashboard/Dashboard.tsx`: o item desabilitado da proposta original agora abre as Configurações da conta, com o escopo descrito acima.
 - `src/web/stu-admin/src/features/dashboard/AdminDashboard.tsx`: gestão global já separa UBS, usuários, funções, backups, monitoramento e auditoria.
 - `src/web/stu-shared/src/properties/PropertyWorkspace.tsx`: componente `Settings`, rótulos e prazos individuais; o valor visual inicial de 90 dias não representa um padrão persistido da UBS.
 - `src/STU.Api/Properties/PropertyEndpoints.cs`: `/api/property-settings/tags` e `/coverage/{microregionId}` usam `territory.manage`, validam escopo e registram auditoria; os contratos atuais não recebem versão de concorrência.

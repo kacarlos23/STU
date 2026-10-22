@@ -94,7 +94,7 @@ function AdminDashboardContent({ session, logout }: AuthenticatedContext) {
       </aside>
 
       <main className="admin-main" id="admin-main-content">
-        <header className="admin-header"><div><span>Painel isolado</span><h1 ref={pageHeading} tabIndex={-1}>{currentLabel}</h1><p>Controle protegido da plataforma STU</p></div><div className="admin-security"><Suspense fallback={null}><NotificationCenter /></Suspense><i aria-hidden="true" /> Ambiente protegido</div></header>
+        <header className="admin-header"><div><span>Painel isolado</span><h1 ref={pageHeading} tabIndex={-1}>{currentLabel}</h1><p>Controle protegido da plataforma STU</p></div><div className="admin-security"><Suspense fallback={null}><NotificationCenter onNavigate={link => { if (link === '/admin/users') navigate('users') }} /></Suspense><i aria-hidden="true" /> Ambiente protegido</div></header>
         {error && section === 'overview' && <div className="admin-error" role="alert">{error}</div>}
         {section === 'overview' && <Overview overview={overview} onNavigate={navigate} />}
         {section === 'health-units' && <HealthUnitsManager onChanged={() => setRefreshKey((value) => value + 1)} />}

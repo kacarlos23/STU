@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using STU.Application.Security;
 using STU.Domain.Auditing;
+using STU.Domain.Operations;
 using STU.Domain.HealthUnits;
 using STU.Infrastructure.Identity;
 using STU.Infrastructure.Persistence;
@@ -393,6 +394,7 @@ public static class AdministrationEndpoints
             return IdentityFailure(result);
         }
 
+        var wasRequested = user.PasswordResetRequestedAtUtc.HasValue;
         user.RequireTemporaryPasswordChange();
         var updateResult = await userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
@@ -400,6 +402,8 @@ public static class AdministrationEndpoints
             return IdentityFailure(updateResult);
         }
 
+        if (wasRequested) dbContext.UserNotifications.Add(UserNotification.Create(user.Id, user.HealthUnitId, NotificationKind.Information,
+            "Pedido de senha atendido", "A administração redefiniu sua senha. Solicite a senha temporária diretamente ao responsável.", "/settings"));
         AddAudit(dbContext, context, actor, "PasswordReset", "User", user.Id, $"Senha temporária de {user.UserName} redefinida.", null, null);
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();

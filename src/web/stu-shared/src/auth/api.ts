@@ -93,3 +93,19 @@ export async function logout(): Promise<void> {
   await post<void>('/api/auth/logout')
 }
 
+export type AccountSettings = {
+  displayName: string
+  userName: string
+  avatarUrl: string | null
+  appearance: 'light' | 'dark'
+  passwordResetRequestedAtUtc: string | null
+  concurrencyToken: string
+}
+
+export function getAccountSettings() { return request<AccountSettings>('/api/auth/profile') }
+export function requestPasswordReset() { return post<AccountSettings>('/api/auth/profile/password-reset-request') }
+export async function saveAccountSettings(body: { displayName: string; appearance: string; concurrencyToken: string; photo: string | null; removePhoto: boolean }) {
+  const token = await getCsrfToken()
+  return request<AccountSettings>('/api/auth/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-STU-CSRF': token }, body: JSON.stringify(body) })
+}
+

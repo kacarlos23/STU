@@ -1,6 +1,7 @@
 export { AuthGate } from './auth/AuthGate'
 export { useAccessibleDialog } from './accessibility/useAccessibleDialog'
 export { CloseIcon } from './components/CloseIcon'
+export { UserAvatar } from './components/UserAvatar'
 export { InteractionProvider, useUiActions } from './interaction/InteractionProvider'
 export type {
   AuthenticatedContext,

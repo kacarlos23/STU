@@ -7,7 +7,7 @@ using STU.Infrastructure.Persistence;
 
 namespace STU.Api.Authentication;
 
-public static class AuthEndpoints
+public static partial class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -33,6 +33,8 @@ public static class AuthEndpoints
         group.MapPost("/logout", LogoutAsync)
             .RequireAuthorization()
             .WithMetadata(new RequireAntiforgeryTokenAttribute(true));
+
+        MapProfileEndpoints(group);
 
         return endpoints;
     }
@@ -233,7 +235,8 @@ public static class AuthEndpoints
             user.MustChangePassword,
             healthUnit,
             roles,
-            permissions.Order(StringComparer.Ordinal).ToArray());
+            permissions.Order(StringComparer.Ordinal).ToArray(),
+            user.ProfilePhotoVersion is null ? null : $"/api/auth/profile/photo?v={user.ProfilePhotoVersion}");
     }
 
     private static Dictionary<string, string[]> ValidatePasswordRequest(ChangePasswordRequest request)

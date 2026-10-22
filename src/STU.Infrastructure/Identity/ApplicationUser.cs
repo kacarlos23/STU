@@ -10,6 +10,11 @@ public sealed class ApplicationUser : IdentityUser<Guid>
 
     public bool MustChangePassword { get; private set; }
 
+    public string AppearancePreference { get; private set; } = "light";
+    public byte[]? ProfilePhoto { get; private set; }
+    public string? ProfilePhotoVersion { get; private set; }
+    public DateTimeOffset? PasswordResetRequestedAtUtc { get; private set; }
+
     public DateTimeOffset? ArchivedAtUtc { get; private set; }
 
     public bool IsArchived => ArchivedAtUtc.HasValue;
@@ -48,7 +53,24 @@ public sealed class ApplicationUser : IdentityUser<Guid>
     public void RequireTemporaryPasswordChange()
     {
         MustChangePassword = true;
+        PasswordResetRequestedAtUtc = null;
     }
+
+    public void UpdateAccountSettings(string displayName, string appearance)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        if (appearance is not ("light" or "dark")) throw new ArgumentOutOfRangeException(nameof(appearance));
+        DisplayName = displayName.Trim();
+        AppearancePreference = appearance;
+    }
+
+    public void SetProfilePhoto(byte[]? photo)
+    {
+        ProfilePhoto = photo;
+        ProfilePhotoVersion = photo is null ? null : Guid.NewGuid().ToString("N");
+    }
+
+    public void RequestPasswordReset() => PasswordResetRequestedAtUtc ??= DateTimeOffset.UtcNow;
 
     public void Archive()
     {

@@ -7,10 +7,11 @@ type Notification = {
   message: string;
   readAtUtc: string | null;
   createdAtUtc: string;
+  link?: string | null;
 };
 type NotificationResponse = { items: Notification[]; unreadCount: number };
 
-export function NotificationCenter() {
+export function NotificationCenter({ onNavigate }: { onNavigate?: (link: string) => void } = {}) {
   const [data, setData] = useState<NotificationResponse>({
     items: [],
     unreadCount: 0,
@@ -69,7 +70,7 @@ export function NotificationCenter() {
         aria-expanded={open}
         aria-label={`Notificações${data.unreadCount ? `, ${data.unreadCount} não lidas` : ""}`}
         className="notification-trigger"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => { if (!open) void load(); setOpen((value) => !value); }}
         ref={trigger}
         type="button"
       >
@@ -118,6 +119,7 @@ export function NotificationCenter() {
                   onClick={() => {
                     if (!item.readAtUtc)
                       void mark(`/api/notifications/${item.id}/read`);
+                    if (item.link && onNavigate) { setOpen(false); onNavigate(item.link); }
                   }}
                   type="button"
                 >

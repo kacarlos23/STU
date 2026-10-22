@@ -25,13 +25,15 @@ public sealed class RegistrationMigrationTests
         var unit = HealthUnit.Create("REG-UP", "UBS preservada");
         var agent = ApplicationUser.Create("migration.agent", "Agente preservado", unit.Id, false);
         agent.Id = Guid.NewGuid();
+        db.HealthUnits.Add(unit); await db.SaveChangesAsync();
+        await HistoricalUserSeed.InsertAsync(db, agent);
         var gf = new GeometryFactory(new PrecisionModel(), 4326);
         var boundary = gf.CreateMultiPolygon([gf.CreatePolygon([new(-40,-18),new(-39,-18),new(-39,-17),new(-40,-17),new(-40,-18)])]);
         var neighborhood = Neighborhood.Create("Bairro preservado", boundary, TerritorySource.Manual);
         var region = Microregion.Create("REG-UP", "Microrregião preservada", unit.Id, agent.Id, boundary, TerritorySource.Manual);
         var unassigned = Microregion.Create("REG-EMPTY", "Microrregião sem agente", unit.Id, null, boundary, TerritorySource.Manual);
         var family = Family.Create(unit.Id, "OLD-001", "Responsável preservado", agent.Id);
-        db.HealthUnits.Add(unit); db.Users.Add(agent); db.Neighborhoods.Add(neighborhood); db.Microregions.AddRange(region, unassigned);
+        db.Neighborhoods.Add(neighborhood); db.Microregions.AddRange(region, unassigned);
         db.MicroregionNeighborhoods.Add(MicroregionNeighborhood.Create(region.Id, neighborhood.Id));
         await db.SaveChangesAsync();
         db.Families.Add(family); db.FamilyVersions.Add(FamilyVersion.Capture(family, 1, "Create", agent.Id));
@@ -62,6 +64,10 @@ public sealed class RegistrationMigrationTests
         Assert.Equal("Histórico preservado", (await db.PropertyVisits.SingleAsync()).Note);
         Assert.True(boundary.EqualsExact((await db.Microregions.SingleAsync(m => m.Id == region.Id)).Boundary));
         Assert.Null((await db.Microregions.SingleAsync(m => m.Id == unassigned.Id)).AssignedAgentId);
-        Assert.Single(await db.Users.ToListAsync());
+        var preserved = Assert.Single(await db.Users.ToListAsync());
+        Assert.Equal(agent.DisplayName, preserved.DisplayName);
+        Assert.Equal("light", preserved.AppearancePreference);
+        Assert.Null(preserved.ProfilePhoto);
+        Assert.Null(preserved.PasswordResetRequestedAtUtc);
     }
 }

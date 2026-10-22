@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using STU.Application.Security;
 using STU.Domain.Auditing;
+using STU.Domain.Operations;
 using STU.Infrastructure.Identity;
 using STU.Infrastructure.Persistence;
 
@@ -179,9 +180,12 @@ public static class HealthUnitUserEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var reset = await userManager.ResetPasswordAsync(target.User, token, temporaryPassword);
         if (!reset.Succeeded) return IdentityFailure(reset);
+        var wasRequested = target.User.PasswordResetRequestedAtUtc.HasValue;
         target.User.RequireTemporaryPasswordChange();
         var updated = await userManager.UpdateAsync(target.User);
         if (!updated.Succeeded) return IdentityFailure(updated);
+        if (wasRequested) db.UserNotifications.Add(UserNotification.Create(target.User.Id, target.User.HealthUnitId, NotificationKind.Information,
+            "Pedido de senha atendido", "O responsável redefiniu sua senha. Solicite a senha temporária diretamente a ele.", "/settings"));
         db.AuditEntries.Add(AuditEntry.Create(actor.Id, actor.UserName ?? actor.DisplayName, "PasswordReset", "User", target.User.Id.ToString(), $"Senha temporária de {target.User.UserName} redefinida pela gerência da UBS.", null, null, http.Connection.RemoteIpAddress?.ToString()));
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -251,6 +255,7 @@ public static class HealthUnitUserEndpoints
                 user.DisplayName,
                 role = role is null ? null : new { role.Id, role.Name, role.DisplayName, role.IsSystem },
                 user.MustChangePassword,
+                user.PasswordResetRequestedAtUtc,
                 user.LockoutEnd,
                 user.ArchivedAtUtc,
                 manageable = user.Id != actorId && !IsProtected(role?.Name),
