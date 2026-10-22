@@ -281,6 +281,8 @@ body,
 .sidebar nav .nav-item-label { color: inherit; display: block; justify-content: initial; text-align: inherit; width: auto; }
 .site-profile .avatar { height: 2.15rem; overflow: hidden; }
 .site-profile .avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.dashboard-content--overview .metric { min-width: 0; }
+.dashboard-content--overview .metric small { overflow-wrap: anywhere; white-space: normal; }
 
 @media (min-width: 761px) {
   .site-header--overview { grid-template-columns: minmax(210px, 1fr) clamp(220px, 24vw, 280px) minmax(250px, 1fr); }
@@ -310,6 +312,8 @@ body,
 }
 
 @media (max-width: 760px) {
+  .dashboard-content--overview .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-content--overview .metric { display: block; }
   .dashboard { background-attachment: scroll; background-position: top right; background-size: auto, 1920px auto; }
   .unit-context { padding-left: 34px; position: relative; }
   .brand-mobile-logo { display: block; left: 0; object-fit: contain; position: absolute; top: 2px; }
